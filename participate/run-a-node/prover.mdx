@@ -1,0 +1,81 @@
+---
+title: Prover
+sidebar_label: Prover
+sidebar_position: 2
+description: How to run a prover node on the Aleo network.
+---
+
+# Prover
+
+Provers solve computational puzzles and broadcast solutions to the network. They do not participate in consensus or produce blocks. Rewards are earned proportionally to computational power — not winner-takes-all.
+
+Each epoch (360 blocks), an `EpochProgram` is sampled from the epoch hash to prevent precomputation.
+
+## Rewards
+
+Two-thirds of coinbase rewards go to provers, one-third to validators. Individual rewards are calculated as:
+
+```
+Individual Reward = Puzzle Reward × (Individual Proof Target / Combined Proof Target)
+```
+
+Puzzle rewards decrease gradually over 10 years, reaching a fixed minimum in year 9.
+
+## Requirements
+
+### Staking
+
+Per ARC-46, provers must stake ALEO credits to submit solutions. The required stake increases quarterly over 24 months:
+
+| Period | Stake Required |
+|--------|---------------|
+| Activation (Q0) | 100,000 ALEO |
+| Month 3 (Q1) | 250,000 ALEO |
+| Month 6 (Q2) | 500,000 ALEO |
+| Month 9 (Q3) | 750,000 ALEO |
+| Month 12 (Q4) | 1,000,000 ALEO |
+| Month 15 (Q5) | 1,250,000 ALEO |
+| Month 18 (Q6) | 1,500,000 ALEO |
+| Month 21 (Q7) | 2,000,000 ALEO |
+| Month 24 (Q8) | 2,500,000 ALEO |
+
+Provers may stake to any validator of their choice.
+
+### Hardware
+
+There are no official hardware requirements for provers. Proving performance depends on Multi-Scalar Multiplication (MSM) and Number Theoretic Transform (NTT) throughput. GPU and FPGA acceleration may improve performance.
+
+### Ports
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 4130 | TCP | P2P communication |
+
+## Setup
+
+### Install snarkOS
+
+```bash
+git clone --branch mainnet --single-branch https://github.com/ProvableHQ/snarkOS.git
+cd snarkOS
+./build_ubuntu.sh
+cargo install --locked --path .
+```
+
+For CUDA GPU support:
+
+```bash
+cargo install --locked --path . --features cuda
+```
+
+### Generate an Account
+
+```bash
+snarkos account new
+```
+
+### Start the Prover
+
+```bash
+./scripts/run-prover.sh
+```

@@ -1,0 +1,96 @@
+---
+title: Types
+sidebar_label: Types
+sidebar_position: 2
+description: Primitive types, composite types, and visibility modifiers in Aleo Instructions.
+---
+
+# Types
+
+## Primitive Types
+
+| Type | Description |
+|------|-------------|
+| `address` | An Aleo address (Bech32m-encoded, starts with `aleo1`) |
+| `boolean` | `true` or `false` |
+| `field` | Base field element of the elliptic curve |
+| `group` | Point on the Twisted Edwards curve (`a = -1`, `d = 3021`) |
+| `scalar` | Scalar field element defined by the curve subgroup |
+| `signature` | A Schnorr signature |
+| `i8`, `i16`, `i32`, `i64`, `i128` | Signed integers |
+| `u8`, `u16`, `u32`, `u64`, `u128` | Unsigned integers |
+
+## Composite Types
+
+### Structs
+
+Structs group fields into reusable composite types. Fields are accessed with dot syntax and new instances are created with `cast`.
+
+```aleo
+struct array3:
+    a0 as u32;
+    a1 as u32;
+    a2 as u32;
+
+function sum_one_to_array3:
+    input r0 as array3.private;
+    add r0.a0 1u32 into r1;
+    add r0.a1 1u32 into r2;
+    add r0.a2 1u32 into r3;
+    cast r1 r2 r3 into r4 as array3;
+    output r4 as array3.private;
+```
+
+### Arrays
+
+Arrays are fixed-length collections of a single type, written as `[{type}; {length}]`. They support indexing and nesting.
+
+```aleo
+// Initialize an array
+cast r0 r1 r2 into r3 as [boolean; 3u32];
+
+// Index an array
+r0[r1] into r2;
+
+// Nested arrays
+r0[0u32][1u32] into r1;
+```
+
+### Records
+
+Records represent private, user-owned state. They must include an `owner` field. Transactions consume existing records and produce new ones.
+
+```aleo
+record token:
+    owner as address.private;
+    amount as u64.private;
+
+function mint:
+    input r0 as u64.private;
+    cast self.signer r0 into r1 as token.record;
+    output r1 as token.record;
+```
+
+When passing a record as input, the `_nonce as group.{visibility}` field is also required.
+
+### Mappings
+
+Mappings are key-value stores that live publicly on-chain. They can only be accessed within `finalize` blocks using [mapping operations](finalize-operations#mapping-operations).
+
+```aleo
+mapping account:
+    key as address.public;
+    value as u64.public;
+```
+
+## Visibility
+
+Every value in a function has a visibility modifier:
+
+| Modifier | Description |
+|----------|-------------|
+| `.public` | Revealed in the transaction |
+| `.private` | Proven in zero-knowledge, not revealed |
+| `.constant` | A compile-time constant |
+
+Closures do not use visibility modifiers on their inputs/outputs.

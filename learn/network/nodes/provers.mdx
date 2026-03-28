@@ -1,0 +1,51 @@
+---
+title: Provers
+sidebar_label: Provers
+sidebar_position: 2
+description: The role of provers in the Aleo network.
+---
+
+# Provers
+
+Provers contribute computational power to the Aleo network by solving **synthesis puzzles** — a form of Proof of Succinct Work (PoSW). They earn coinbase rewards proportional to their computational contribution.
+:::note
+Provers do not participate in consensus or produce blocks.
+:::
+
+
+## Synthesis Puzzle
+
+Each epoch (360 blocks), the network generates a new **EpochProgram** — a randomly sampled program derived from the epoch hash. Provers must synthesize this program to produce valid solutions.
+
+The process for each attempt:
+
+1. Construct a nonce from the prover's address, the epoch hash, and a counter
+2. Sample random inputs seeded by the nonce
+3. Synthesize the R1CS circuit for the EpochProgram with those inputs
+4. Compute a Merkle root over the circuit assignment
+5. Convert the Merkle root to a `proof_target`
+6. If the target meets the current `proof_target` threshold, submit the solution; otherwise, increment the counter and try again
+
+Because the EpochProgram changes every epoch and inputs are randomized per attempt, solutions cannot be precomputed.
+
+## Rewards
+
+Provers receive **2/3 of coinbase rewards**. Individual rewards are calculated as:
+
+```
+Individual Reward = Puzzle Reward × (Individual Proof Target / Combined Proof Target)
+```
+
+This is a proportional model — not winner-takes-all. Every valid solution earns a share of the reward.
+
+Coinbase rewards decrease gradually over 10 years, reaching a fixed minimum in year 9.
+
+## Staking Requirement
+
+Per [ARC-46](https://github.com/ProvableHQ/ARCs/discussions/71), provers must stake Aleo credits to submit solutions. The required stake increases quarterly over 24 months, from 100,000 to 2,500,000 credits. See the full schedule in [Run a Prover](/participate/run-a-node/prover).
+
+## Target Retargeting
+
+The network dynamically adjusts the `proof_target` and `coinbase_target` using an ASERT (Absolutely Scheduled Exponentially Rising Targets) algorithm, targeting an average anchor time of 25 seconds. When the cumulative proof target reaches half the coinbase target, the targets are recalculated.
+
+For practical setup instructions, see [Run a Prover](/participate/run-a-node/prover).

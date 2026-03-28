@@ -1,0 +1,79 @@
+---
+title: Customizations
+sidebar_label: Customizations
+sidebar_position: 2
+---
+
+import WalletSelector from '@site/src/components/WalletDemo/WalletSelector';
+import WalletActions from '@site/src/components/WalletDemo/WalletActions';
+import CopyCodeBlock from '@site/src/components/WalletDemo/CopyCodeBlock';
+import BrowserOnly from '@docusaurus/BrowserOnly';
+
+# Theming
+
+Customize the wallet adapter appearance using CSS variables. Override these in your stylesheet to match your app's design system.
+
+<CopyCodeBlock language="css" label="CSS Variables">{`:root {
+      --wallet-adapter-primary: #4a90d9;
+      --wallet-adapter-primary-hover: #357abd;
+      --wallet-adapter-primary-foreground: #ffffff;
+      --wallet-adapter-background: #1a1a2e;
+      --wallet-adapter-surface: #16213e;
+      --wallet-adapter-surface-hover: #1a2744;
+      --wallet-adapter-text: #e0e0e0;
+      --wallet-adapter-text-secondary: #8892a4;
+      --wallet-adapter-border: #2a2a4a;
+      --wallet-adapter-border-light: #3a3a5a;
+      --wallet-adapter-radius-sm: 6px;
+      --wallet-adapter-radius: 10px;
+      --wallet-adapter-radius-lg: 14px;
+      --wallet-adapter-radius-xl: 20px;
+      --wallet-adapter-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      --wallet-adapter-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.25);
+}`}</CopyCodeBlock>
+
+## Build Custom Components
+
+Use the `useWallet()` hook and `<WalletModalProvider/>` to build fully custom wallet UIs.
+
+### Select Wallet
+
+<WalletSelector />
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+
+const { wallets, selectWallet, connected, wallet } = useWallet();
+
+// Iterate over available wallets
+wallets.map((w) => {
+    const isConnected = connected && wallet?.adapter.name === w.adapter.name;
+    const readyState = w.readyState; // 'Installed' | 'NotDetected' | 'Loadable'
+  
+    return (
+      <button
+        onClick={() => selectWallet(w.adapter.name)}
+        disabled={isConnected || readyState !== 'Installed'}
+      >
+        <img src={w.adapter.icon} alt={w.adapter.name} />
+        {w.adapter.name}
+      </button>
+    );
+});`}</CopyCodeBlock>
+
+### Wallet Actions
+
+<WalletActions />
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { Network } from '@provablehq/aleo-types';
+
+const { connect, disconnect, switchNetwork, connected, wallet, network } = useWallet();
+
+// Connect to wallet
+await connect(Network.MAINNET);
+
+// Disconnect
+await disconnect();
+
+// Switch network
+await switchNetwork(Network.TESTNET);`}</CopyCodeBlock>

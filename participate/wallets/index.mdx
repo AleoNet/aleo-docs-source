@@ -1,0 +1,96 @@
+---
+title: Wallets
+sidebar_label: Wallets
+sidebar_position: 1
+description: Wallets available for the Aleo network.
+---
+
+import WalletEntry from '@site/src/components/WalletEntry';
+
+## External Wallets
+
+<WalletEntry
+  name="Shield"
+  url="https://shield.app/"
+  logo="/img/wallets/shield.svg"
+  badge="Recommended"
+  platforms={[
+    { label: 'Chrome', url: 'https://chromewebstore.google.com/detail/hhddpjpacfjaakjioinajgmhlbhfchao' },
+    { label: 'iOS', url: 'https://apps.apple.com/app/id6757471699' },
+    { label: 'Android', url: 'https://play.google.com/store/apps/details?id=com.provable.shieldmobile' },
+  ]}
+>
+
+Built by Provable in partnership with the Aleo Network Foundation, Shield is the recommended wallet for interacting with the Aleo ecosystem.
+
+- **Record Scanning** — Automatically discovers and decrypts your private records onchain
+- **Delegated Proving** — Proof generation is handled in a privacy-preserving way server-side, so private transactions are fast
+- **Feemaster** — Private transactions and shielding of assets are fee-free
+- **Private Stablecoins** — Deep integrations with [USDCx](https://usdcx.aleo.org/) and [USAD](https://usad.aleo.org/) for private stablecoin transfers
+- **Crosschain Swaps** — Swap assets across chains via [NEAR Intents](https://near-intents.org/) and [Houdini Swap](https://app.houdiniswap.com/)
+
+</WalletEntry>
+
+<WalletEntry
+  name="Puzzle"
+  url="https://puzzle.online/"
+  logo="/img/wallets/puzzle.webp"
+  platforms={[
+    { label: 'Chrome', url: 'https://chromewebstore.google.com/detail/puzzle-aleo-wallet/fdchdcpieegfofnofhgdombfckhbcokj' },
+    { label: 'iOS', url: 'https://apps.apple.com/us/app/puzzle-aleo-wallet/id6450268321' },
+    { label: 'Android', url: 'https://play.google.com/store/apps/details?id=online.puzzle&hl=en_US' },
+  ]}
+>
+
+A self-custodial Aleo wallet with a daily Arcade — onchain casual games with real prizes redeemable for rewards.
+
+</WalletEntry>
+
+<WalletEntry
+  name="Fox"
+  url="https://foxwallet.com/"
+  logo="/img/wallets/fox.svg"
+  platforms={[
+    { label: 'Chrome', url: 'https://chromewebstore.google.com/detail/foxwallet-aleo-wallet/pmmnimefaichbcnbndcfpaagbepnjaig' },
+    { label: 'iOS', url: 'https://apps.apple.com/us/app/foxwallet-secure-crypto-asset/id1590983231' },
+    { label: 'Android', url: 'https://foxwallet.com/download/' },
+  ]}
+>
+
+A multi-chain wallet supporting 100+ networks including Aleo.
+
+</WalletEntry>
+
+<WalletEntry
+  name="Leo"
+  url="https://www.leo.app/"
+  logo="/img/wallets/leo.png"
+  platforms={[
+    { label: 'Chrome', url: 'https://chromewebstore.google.com/detail/leo-wallet/nebnhfamliijlghikdgcigoebonmoibm' },
+    { label: 'iOS', url: 'https://apps.apple.com/us/app/leo-wallet-for-aleo/id6477803155' },
+    { label: 'Android', url: 'https://play.google.com/store/apps/details?id=com.demoxlabs.leo&hl=en_US' },
+  ]}
+>
+
+A privacy-preserving Aleo wallet owned and maintained by Provable. Will be deprecated in Q2 2026.
+
+</WalletEntry>
+
+## Embedded Wallets
+
+Embedded wallets are non-custodial wallets created and managed within your application. Users authenticate with familiar methods (email, social login, passkeys) and a wallet is provisioned automatically — no browser extension or external app required.
+
+<WalletEntry
+  name="Dynamic"
+  url="https://www.dynamic.xyz/"
+  logo="/img/wallets/dynamic.jpeg"
+  platforms={[
+    { label: 'Browser', url: 'https://app.dynamic.xyz/' },
+  ]}
+>
+
+Dynamic provides embedded wallet infrastructure with Aleo support. Their SDK handles authentication, wallet creation, and multi-chain connectivity.
+
+**Features:** Email, social, and passkey authentication. TSS-MPC key management (private key is never assembled in one place). SDKs for React, React Native, Flutter, Swift, Kotlin, and more.
+
+</WalletEntry>

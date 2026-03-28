@@ -1,0 +1,103 @@
+---
+title: Validator
+sidebar_label: Validator
+sidebar_position: 1
+description: How to run a validator node on the Aleo network.
+---
+
+# Validator
+
+Validators form the consensus network using AleoBFT, a DAG-based BFT protocol. They verify zero-knowledge proofs, validate transactions, and produce blocks. Voting power is proportional to staked ALEO credits.
+
+The network supports a maximum of **200 validators**.
+
+## Requirements
+
+### Hardware
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| CPU | 64 cores | 128+ cores |
+| RAM | 256 GiB | 384+ GiB |
+| Storage | 4 TB NVMe SSD (PCIe Gen 3/4) | 6+ TB NVMe SSD |
+| Network | 500 Mbps symmetric | 500 Mbps symmetric |
+
+### Staking
+
+| Parameter | Value |
+|-----------|-------|
+| Minimum self-bond | 100 ALEO |
+| Minimum total stake (to enter committee) | 10,000,000 ALEO |
+| Commission | Configurable, 0–100% |
+| Unbonding period | 360 blocks |
+
+Validators are automatically removed from the committee if total stake drops below 10,000,000 ALEO or self-bond drops below 100 ALEO.
+
+### Ports
+
+| Port | Protocol | Purpose | Access |
+|------|----------|---------|--------|
+| 4130 | TCP | P2P peers | Public |
+| 5000 | TCP | BFT communication | Trusted validators only |
+| 3030 | TCP | REST server | **Do not expose** |
+| 3000 | TCP | Metrics dashboard | Internal only |
+| 9000 | TCP | Metrics export | Internal only |
+
+## Setup
+
+### Install snarkOS
+
+```bash
+git clone --branch mainnet --single-branch https://github.com/ProvableHQ/snarkOS.git
+cd snarkOS
+./build_ubuntu.sh
+cargo install --locked --path .
+```
+
+### Configure System
+
+Set the open file limit to at least 16,384:
+
+```bash
+ulimit -n 16384
+```
+
+### Generate an Account
+
+```bash
+snarkos account new
+```
+
+Save your private key securely. Write it to a file for the node to use:
+
+```bash
+echo "YOUR_PRIVATE_KEY" > ~/snarkOS/privatekey
+```
+
+### Bond as a Validator
+
+```bash
+leo execute credits.aleo/bond_validator \
+  <withdrawal_address> \
+  <amount_in_microcredits> \
+  <commission_percentage> \
+  --network mainnet \
+  --endpoint https://api.explorer.provable.com/v1 \
+  --broadcast
+```
+
+You need at least 10,000,000 ALEO in total stake (self-bond + delegations) to join the committee.
+
+### Start the Node
+
+```bash
+snarkos start --validator --nodisplay \
+  --bft 0.0.0.0:5000 \
+  --node 0.0.0.0:4130 \
+  --peers [peers] \
+  --validators [validators] \
+  --verbosity 1 \
+  --norest \
+  --private-key-file ~/snarkOS/privatekey
+```

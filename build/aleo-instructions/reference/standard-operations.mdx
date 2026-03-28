@@ -1,0 +1,114 @@
+---
+title: Standard Operations
+sidebar_label: Standard Operations
+sidebar_position: 3
+toc_min_heading_level: 2
+toc_max_heading_level: 3
+description: Standard operations reference for Aleo Instructions — arithmetic, logic, comparison, assert, cast, control flow, and serialization.
+---
+
+# Standard Operations
+
+These operations are available in `function`, `closure`, and `finalize` blocks — except for `async`, which is function-scope only.
+
+## Arithmetic
+
+| Opcode | Arity | Supported Types | Description |
+|--------|-------|-----------------|-------------|
+| `abs` | Unary | I8–I128 | Absolute value, halts on overflow |
+| `abs.w` | Unary | I8–I128 | Absolute value, wrapping |
+| `add` | Binary | Field, Group, I8–I128, U8–U128, Scalar | Addition, halts on overflow |
+| `add.w` | Binary | I8–I128, U8–U128 | Addition, wrapping |
+| `div` | Binary | Field, I8–I128, U8–U128 | Division, halts on overflow/zero |
+| `div.w` | Binary | I8–I128, U8–U128 | Division, wrapping |
+| `double` | Unary | Field, Group | Doubles the input |
+| `inv` | Unary | Field | Multiplicative inverse, halts on zero |
+| `mod` | Binary | U8–U128 | Modulo, halts on zero |
+| `mul` | Binary | Field, Group×Scalar, Scalar×Group, I8–I128, U8–U128 | Multiplication, halts on overflow |
+| `mul.w` | Binary | I8–I128, U8–U128 | Multiplication, wrapping |
+| `neg` | Unary | Field, Group, I8–I128 | Negation, halts on overflow |
+| `pow` | Binary | Field, (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Exponentiation, halts on overflow |
+| `pow.w` | Binary | (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Exponentiation, wrapping |
+| `rem` | Binary | I8–I128, U8–U128 | Remainder, halts on overflow/zero |
+| `rem.w` | Binary | I8–I128, U8–U128 | Remainder, wrapping |
+| `shl` | Binary | (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Shift left, halts past boundary |
+| `shl.w` | Binary | (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Shift left, wrapping |
+| `shr` | Binary | (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Shift right, halts past boundary |
+| `shr.w` | Binary | (I8–I128)×(U8/U16/U32), (U8–U128)×(U8/U16/U32) | Shift right, wrapping |
+| `square` | Unary | Field | Squares the input |
+| `sqrt` | Unary | Field | Square root, halts on non-residues |
+| `sub` | Binary | Field, Group, I8–I128, U8–U128 | Subtraction, halts on overflow |
+| `sub.w` | Binary | I8–I128, U8–U128 | Subtraction, wrapping |
+
+## Logic & Bitwise
+
+| Opcode | Arity | Supported Types | Description |
+|--------|-------|-----------------|-------------|
+| `and` | Binary | Boolean, I8–I128, U8–U128 | Bitwise AND (logical AND for booleans) |
+| `nand` | Binary | Boolean | Returns `false` if both `true` |
+| `nor` | Binary | Boolean | Returns `true` if neither `true` |
+| `not` | Unary | Boolean, I8–I128, U8–U128 | Bitwise NOT (logical NOT for booleans) |
+| `or` | Binary | Boolean, I8–I128, U8–U128 | Bitwise OR |
+| `xor` | Binary | Boolean, I8–I128, U8–U128 | Bitwise XOR |
+
+## Comparison
+
+| Opcode | Arity | Supported Types | Destination |
+|--------|-------|-----------------|-------------|
+| `gt` | Binary | Field, I8–I128, U8–U128, Scalar | Boolean |
+| `gte` | Binary | Field, I8–I128, U8–U128, Scalar | Boolean |
+| `lt` | Binary | Field, I8–I128, U8–U128, Scalar | Boolean |
+| `lte` | Binary | Field, I8–I128, U8–U128, Scalar | Boolean |
+| `is.eq` | Binary | Any equal types | Boolean |
+| `is.neq` | Binary | Any equal types | Boolean |
+
+## Assert
+
+| Opcode | Description |
+|--------|-------------|
+| `assert.eq` | Halts if operands are not equal |
+| `assert.neq` | Halts if operands are equal |
+
+Supported for all comparable types including Address, Boolean, Field, Group, integers, Scalar, Signature, Struct, and Record.
+
+## Control Flow
+
+| Opcode | Description |
+|--------|-------------|
+| `call` | Calls a closure or external function |
+| `call.dynamic` | Dynamically calls a function by program/network/function fields *(V14)* |
+| `async` | Produces a future for finalize execution (see [Futures](programs#futures)). Function-scope only. |
+| `ternary` | Selects first or second value based on a boolean condition |
+
+```aleo
+call foo.aleo/bar r0 into r1;
+ternary r0 r1 r2 into r3;   // if r0 then r1 else r2
+```
+
+## Cast
+
+| Opcode | Description |
+|--------|-------------|
+| `cast` | Casts operands into the declared type |
+| `cast.lossy` | Casts with lossy truncation for integer conversions |
+
+`cast` supports conversion between all primitive types, and assembly of structs, records, and arrays from component values. Special destinations `group.x` and `group.y` extract coordinates from a group element.
+
+## Serialization
+
+*Added in Consensus V11.*
+
+| Opcode | Description |
+|--------|-------------|
+| `serialize.bits` | Serializes a value to an array of booleans (Aleo variant encoding) |
+| `serialize.bits.raw` | Serializes a value to an array of booleans (raw bit encoding) |
+| `deserialize.bits` | Deserializes an array of booleans to a value (Aleo variant encoding) |
+| `deserialize.bits.raw` | Deserializes an array of booleans to a value (raw bit encoding) |
+
+## Dynamic Record Access
+
+*Added in Consensus V14.*
+
+| Opcode | Description |
+|--------|-------------|
+| `get.record.dynamic` | Dynamically accesses a record entry |

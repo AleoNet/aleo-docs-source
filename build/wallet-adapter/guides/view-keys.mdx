@@ -1,0 +1,44 @@
+---
+title: Transition View Keys
+sidebar_label: View Keys
+sidebar_position: 6
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Transition View Keys
+
+This requires the `OnChainHistory` decrypt permission.
+
+<DemoForm
+  action="Fetch"
+  fields={[
+    { type: 'text', name: 'transactionId', label: 'Transaction ID', placeholder: 'Enter the transaction ID' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const viewKeys = await wallet.transitionViewKeys(String(values.transactionId));
+    return viewKeys;
+  }}
+/>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import React, { useCallback } from 'react';
+
+export const GetTransitionViewKeys = () => {
+  const { address, transitionViewKeys, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const transactionId = 'at1...';
+    const viewKeys = await transitionViewKeys(transactionId);
+    console.log('Transition View Keys:', viewKeys);
+  }, [address, transitionViewKeys, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Get Transition View Keys
+    </button>
+  );
+};`}</CopyCodeBlock>

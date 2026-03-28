@@ -1,0 +1,36 @@
+---
+title: Clients
+sidebar_label: Clients
+sidebar_position: 3
+description: The role of clients in the Aleo network.
+---
+
+# Clients
+
+Clients serve blockchain data and provide an interface between users and the network. They do not participate in consensus, produce blocks, or solve puzzles.
+
+## Role
+
+Clients are responsible for:
+
+- **Relaying transactions** — Receiving transactions from users and forwarding them to validators
+- **Serving blockchain data** — Providing block, transaction, and mapping data via REST API
+- **Bootstrapping peers** — Acting as entry points for new nodes joining the network
+
+## Client Types
+
+### Core Client
+
+Connects directly to validator nodes on the consensus network and verifies network traffic before it reaches validators. Core clients do **not** expose a REST API and are typically used as internal infrastructure.
+
+### Outer Client
+
+Connects to other clients and provers on the P2P network, serving as a public-facing entry point. Outer clients expose a **REST API on port 3030** for querying blockchain data — blocks, transactions, program state, and mapping values.
+
+## When to Run a Client
+
+- **Application developers** — If your application needs to query blockchain state or submit transactions, an outer client gives you direct access without relying on third-party infrastructure
+- **Infrastructure providers** — Running clients helps decentralize data availability across the network
+- **Validators** — Core clients can act as a buffer between the public network and validator nodes
+
+For practical setup instructions, see [Run a Client](/participate/run-a-node/client).

@@ -1,0 +1,97 @@
+---
+title: Getting Started
+sidebar_label: Getting Started
+sidebar_position: 1
+---
+
+import WalletStatus from '@site/src/components/WalletDemo/WalletStatus';
+import DynamicProviderCode from '@site/src/components/WalletDemo/DynamicProviderCode';
+import CopyCodeBlock from '@site/src/components/WalletDemo/CopyCodeBlock';
+import BrowserOnly from '@docusaurus/BrowserOnly';
+
+# Aleo Wallet Adapter
+
+A modular toolkit for integrating Aleo wallets into your React applications. Connect to any compatible wallet and access the full power of the Aleo network.
+
+## Installation
+
+Install the required dependencies:
+
+```bash
+npm install --save \
+    @provablehq/aleo-wallet-adaptor-react \
+    @provablehq/aleo-wallet-adaptor-react-ui \
+    @provablehq/aleo-wallet-adaptor-core \
+    @provablehq/aleo-wallet-standard \
+    @provablehq/aleo-types \
+    react
+```
+
+Additionally, install one or more wallet adapters:
+
+```bash
+# Shield Wallet
+npm install --save @provablehq/aleo-wallet-adaptor-shield
+
+# Leo Wallet
+npm install --save @provablehq/aleo-wallet-adaptor-leo
+
+# Puzzle Wallet
+npm install --save @provablehq/aleo-wallet-adaptor-puzzle
+
+# Fox Wallet
+npm install --save @provablehq/aleo-wallet-adaptor-fox
+```
+
+## Setup
+
+Wrap your application with the `AleoWalletProvider`:
+
+<DynamicProviderCode />
+
+Options configured on the page header are reflected in the code above.
+
+### Provider Props
+
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `wallets` | `WalletAdapter[]` | Yes | — | Array of wallet adapter instances |
+| `network` | `Network` | No | `TESTNET` | `MAINNET`, `TESTNET`, or `CANARY` |
+| `decryptPermission` | `DecryptPermission` | No | `NoDecrypt` | Permission level for record decryption:<br/><br/>`NoDecrypt` — No record decryption<br/>`UponRequest` — Decrypt records upon request<br/>`AutoDecrypt` — Decrypt records automatically<br/>`OnChainHistory` — Can request onchain record plain texts and transaction IDs, but cannot decrypt them |
+| `autoConnect` | `boolean` | No | `false` | Auto-connect on mount |
+| `programs` | `string[]` | No | All Programs | Array of program IDs that will be called |
+| `onError` | `(error) => void` | No | — | Error handler callback |
+| `localStorageKey` | `string` | No | `'walletName'` | Key for storing selected wallet in localStorage.|
+
+## `useWallet` Hook
+
+The `useWallet` hook provides access to wallet state and methods:
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+
+const { connected, address, network, switchNetwork } = useWallet();
+
+// Pre-built button component
+<WalletMultiButton />
+
+// Access wallet state
+console.log('Connected:', connected);
+console.log('Address:', address);
+console.log('Network:', network);`}</CopyCodeBlock>
+
+## `<WalletMultiButton/>` Component
+
+The `WalletMultiButton` component provides a ready-to-use button and modal for connecting to a wallet:
+
+<BrowserOnly>{() => {
+  const { WalletMultiButton } = require('@provablehq/aleo-wallet-adaptor-react-ui');
+  return <WalletMultiButton />;
+}}</BrowserOnly>
+
+<div style={{marginTop: '1rem'}} />
+
+<CopyCodeBlock>{`import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+
+// Pre-built button component
+<WalletMultiButton />`}</CopyCodeBlock>

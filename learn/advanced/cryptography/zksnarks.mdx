@@ -1,0 +1,71 @@
+---
+title: zkSNARKs
+sidebar_label: zkSNARKs
+sidebar_position: 1
+description: An introduction to zkSNARKs and their role in Aleo.
+---
+
+# zkSNARKs
+
+Aleo's privacy and scalability model depends on **zkSNARKs** — zero-knowledge Succinct Non-interactive Arguments of Knowledge. This page covers how the proof system works under the hood.
+
+## Varuna
+
+Aleo uses **Varuna**, a zkSNARK proof system based on Algebraic Holographic Proofs (AHP), evolved from the [Marlin](https://eprint.iacr.org/2019/1047) proof system. Varuna is designed for batching multiple circuits efficiently — critical for Aleo, where a single transaction can contain many transitions, each requiring its own proof.
+
+Varuna uses **SonicKZG10** as its polynomial commitment scheme (a KZG-based scheme with pairings over [BLS12-377](/learn/advanced/cryptography/the-aleo-curves)).
+
+## R1CS
+
+Before a proof can be generated, program logic must be expressed as an arithmetic circuit. Aleo uses **Rank-1 Constraint Systems (R1CS)** as its intermediate representation.
+
+### How R1CS Works
+
+An R1CS instance consists of three matrices — **A**, **B**, and **C** — over a finite field. A valid assignment (witness) is a vector **w** such that for every row *i*:
+
+```
+(A[i] · w) × (B[i] · w) = (C[i] · w)
+```
+
+Each row represents a **constraint** — a rule that the computation must satisfy. The number of constraints corresponds to the complexity of the program. Every operation in an Aleo program (addition, comparison, hash, signature verification) translates into one or more R1CS constraints.
+
+### From Leo to R1CS
+
+The compilation pipeline:
+
+1. **Leo** source code compiles to **Aleo Instructions** (a statically-typed assembly language)
+2. **Aleo Instructions** are synthesized into **R1CS circuits** by snarkVM's synthesizer
+3. The R1CS circuit is used by Varuna to generate and verify proofs
+
+## Proving and Verification
+
+### Proving
+
+Varuna's proving process is a 5-round interactive protocol made non-interactive via the **Fiat-Shamir transform** (using a Poseidon-based algebraic sponge):
+
+1. Generate witness polynomials from the R1CS assignment and commit via SonicKZG10
+2. Compute sumcheck polynomials and commit
+3. Commit to index polynomials and quotients
+4. Generate constraint satisfaction polynomials
+5. Commit final auxiliary polynomials
+
+When zero-knowledge mode is enabled (as it is for private transitions), mask polynomials are added at each stage to prevent the verifier from learning anything about the witness.
+
+### Verification
+
+Verification replays all five rounds deterministically: absorbing commitments, reconstructing linear combinations and query sets, then calling SonicKZG10's batch check to verify polynomial evaluations against commitments. Verification is fast — orders of magnitude cheaper than proving.
+
+## Setup
+
+Varuna uses a **universal setup** — a single Structured Reference String (SRS) that works for any circuit up to a maximum size. This is generated once and reused across all programs on the network.
+
+From the universal SRS, **circuit-specific keys** are derived for each program function:
+
+- **Circuit Proving Key** — Used by the prover to generate proofs for a specific function
+- **Circuit Verifying Key** — Used by validators to verify proofs for that function; stored onchain at deployment
+
+The universal SRS supports polynomial degrees from 2^15 to 2^28, with parameters loaded from `parameters.provable.com`.
+
+## Proof Batching
+
+A single Aleo transaction may contain up to 32 transitions, each with its own circuit. Varuna batches all transition proofs plus inclusion proofs (verifying that input records exist onchain) into an aggregated proof, reducing verification cost significantly compared to verifying each proof independently.

@@ -1,0 +1,56 @@
+---
+title: Deploy Programs
+sidebar_label: Deploy
+sidebar_position: 2
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Deploy Programs
+
+<DemoForm
+  action="Deploy"
+  fields={[
+    { type: 'textarea', name: 'program', label: 'Program Code', placeholder: 'Paste your program code here...', helperText: 'Paste your complete Aleo program code here' },
+    { type: 'number', name: 'priorityFee', label: 'Priority Fee', placeholder: 'Priority Fee (in microcredits)', helperText: 'Fee amount in microcredits (1 credit = 1,000,000 microcredits)' },
+    { type: 'checkbox', name: 'privateFee', label: 'Pay fee privately' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const result = await wallet.executeDeployment({
+      program: values.program,
+      address: wallet.address,
+      priorityFee: Number(values.priorityFee),
+      privateFee: !!values.privateFee,
+    });
+    return { transactionId: result.transactionId };
+  }}
+/>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import { AleoDeployment } from '@provablehq/aleo-wallet-standard';
+import React, { useCallback } from 'react';
+
+export const DeployProgram = () => {
+  const { address, executeDeployment, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const deployment: AleoDeployment = {
+      program: \`program hello.aleo; ...\`,
+      address: address,
+      priorityFee: 1000000,
+      privateFee: false,
+    };
+
+    const result = await executeDeployment(deployment);
+    console.log('Deployment TX:', result.transactionId);
+  }, [address, executeDeployment, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Deploy Program
+    </button>
+  );
+};`}</CopyCodeBlock>

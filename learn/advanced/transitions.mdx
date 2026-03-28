@@ -1,0 +1,118 @@
+---
+title: Transitions
+sidebar_label: Transitions
+sidebar_position: 3
+description: Understanding state transitions on the Aleo network.
+---
+
+# Transitions
+
+This page covers the internal structure and cryptography of transitions in detail. For a high-level overview, see [Transactions](/learn/core-concepts/transactions).
+
+## Structure
+
+Each transition contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | Field | Merkle tree digest of input and output IDs |
+| `program_id` | String | The program this transition belongs to |
+| `function_name` | String | The function that was called |
+| `inputs` | Array | Constant, public, private, or record inputs |
+| `outputs` | Array | Constant, public, private, record, or Future outputs |
+| `tpk` | Group | Transition public key |
+| `tcm` | Field | Transition commitment |
+| `scm` | Field | Signer commitment |
+
+## Cryptographic Keys
+
+Each transition generates a unique set of cryptographic keys for encryption and identity binding.
+
+### Transition Public Key (TPK)
+
+```
+r = HashToScalar(serial_number_domain || sk_sig || nonce)
+tpk = r × G
+```
+
+A fresh random scalar `r` is derived per transition. The TPK is published onchain and used by recipients to decrypt private outputs.
+
+### Transition View Key (TVK)
+
+```
+tvk = (signer_address × r).to_x_coordinate()
+```
+
+The TVK encrypts and decrypts private inputs and outputs for this specific transition. It can be shared with auditors to reveal a single transition's data without exposing the account view key.
+
+### Transition Commitment (TCM)
+
+```
+tcm = Hash(tvk)
+```
+
+Commits to the TVK without revealing it. Published onchain.
+
+### Signer Commitment (SCM)
+
+```
+scm = Hash(signer.to_x_coordinate() || root_tvk)
+```
+
+Binds the signer's identity to the root transition view key (the TVK of the top-level transition in the transaction). This ensures all transitions in a transaction are attributable to the same signer without revealing the signer's address.
+
+## Input Record Processing
+
+When a transition consumes a record, the following steps produce a **serial number** (preventing double-spending) and a **tag** (enabling [record scanning](/learn/advanced/record-scanning)):
+
+1. **Record View Key**: `(record.nonce × view_key).to_x_coordinate()`
+2. **Record Commitment**: Hash of all record fields (program ID, record name, field values, nonce)
+3. **Generator H**: `HashToGroup(serial_number_domain || commitment)` — a unique generator per record
+4. **Gamma**: `gamma = sk_sig × H`
+5. **Serial Number**:
+   ```
+   sn_nonce = Hash(serial_number_domain || (cofactor × gamma).to_x_coordinate())
+   serial_number = Commit(commitment_bits, sn_nonce)
+   ```
+6. **Tag**: `Hash(sk_tag, commitment)` — computed from the [graph key](/learn/advanced/key-derivation#6-graph-key)
+
+The serial number is published onchain to mark the record as spent. The tag enables wallets to track which records have been consumed.
+
+## Output Record Processing
+
+When a transition creates a new record:
+
+1. **Record Commitment**: Hash of the new record's fields
+2. **Encryption Randomizer**: `Hash(tvk || output_index)`
+3. **Record View Key**: `(owner_address × randomizer).to_x_coordinate()`
+4. **Encryption**: For each field:
+   ```
+   randomizer[i] = Hash(encryption_domain || record_view_key)[i]
+   ciphertext[i] = plaintext[i] + randomizer[i]
+   ```
+5. **Checksum**: Hash of the full ciphertext (integrity verification)
+6. **Sender Ciphertext** (V1 records only): The signer's address encrypted with a separate randomizer derived from the record view key
+
+The encrypted record is stored onchain. Only the owner (via their view key or the record-specific view key) can decrypt it.
+
+## Non-Record Private Data
+
+Private inputs and outputs that are not records (e.g., private function arguments) are encrypted using a **plaintext view key**:
+
+```
+plaintext_view_key = Hash(function_id || tvk || index)
+```
+
+The recipient decrypts by reconstructing this key:
+
+```
+plaintext_view_key = (tpk × view_key).to_x_coordinate()
+```
+
+This works because `tpk × view_key = (r × G) × view_key = r × (view_key × G) = r × address`, and the prover computed the same value as `signer_address × r`.
+
+## Inclusion Proofs
+
+Each transition that consumes records must prove those records exist onchain. Inclusion proofs are Merkle proofs against the ledger's state root, demonstrating that the record commitment is present in the global state tree.
+
+These inclusion proofs are batched together with the transition's execution proof via Varuna, so the validator verifies a single aggregated proof per transaction rather than checking each Merkle proof independently.

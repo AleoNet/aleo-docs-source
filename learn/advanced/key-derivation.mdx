@@ -1,0 +1,108 @@
+---
+title: Key Derivation
+sidebar_label: Key Derivation
+sidebar_position: 2
+description: How cryptographic keys are derived on Aleo.
+---
+
+# Key Derivation
+
+This page covers the full cryptographic derivation path for Aleo accounts. For a high-level overview, see [Accounts & Keys](/learn/core-concepts/accounts-and-keys).
+
+## Derivation Path
+
+All account keys derive from a single random seed:
+
+```
+Seed → Private Key → Compute Key → View Key → Address
+                                  → Graph Key
+```
+
+### 1. Seed
+
+A random 32-byte value, sampled offline. This is the root secret from which everything else is derived.
+
+### 2. Private Key
+
+Two scalar values are derived from the seed using Poseidon hashing:
+
+```
+sk_sig = HashToScalar("AleoAccountSignatureSecretKey0" || seed)
+r_sig  = HashToScalar("AleoAccountSignatureRandomizer0.0" || seed)
+```
+
+`HashToScalar` uses the Poseidon sponge hash with input rate 2. The domain separator strings are encoded to field elements via UTF-8 → little-endian integer → reduction mod the base field prime.
+
+The private key is the tuple `(seed, sk_sig, r_sig)`, encoded as a Base58 string prefixed with `APrivateKey1`.
+
+### 3. Compute Key
+
+Derived from the private key via scalar multiplication on the [Edwards BLS12](/learn/advanced/cryptography/the-aleo-curves) generator **G**:
+
+```
+pk_sig = sk_sig × G
+pr_sig = r_sig × G
+sk_prf = HashToScalar(pk_sig.x || pr_sig.x)
+```
+
+The compute key is the tuple `(pk_sig, pr_sig, sk_prf)`. It can be shared with third-party provers for [delegated proving](/learn/advanced/delegated-proving) — it allows proof generation but cannot sign transactions or decrypt records.
+
+### 4. View Key
+
+A single scalar derived from the private key components:
+
+```
+view_key = sk_sig + r_sig + HashToScalar(pk_sig || pr_sig)
+```
+
+The view key allows decryption of all records and transaction data belonging to the account. Encoded as Base58 with prefix `AViewKey1`.
+
+### 5. Address
+
+The address is derived from the view key via scalar multiplication:
+
+```
+address = view_key × G
+```
+
+The result is a point on the Edwards BLS12 curve, encoded in Bech32 format with prefix `aleo1`.
+
+### 5.1. Graph Key
+
+Derived from the view key for [record scanning](/learn/advanced/record-scanning):
+
+```
+sk_tag = HashToScalar("AleoGraphKey" || view_key || 0)
+```
+
+The graph key's `sk_tag` is used to compute deterministic tags on record commitments, enabling efficient [spent detection](/learn/advanced/record-scanning#tag-method-requires-view-key) without needing the private key.
+
+## Poseidon Hash
+
+All `HashToScalar` operations use the **Poseidon** hash function — an algebraic hash that operates directly over field elements. Variants used:
+
+- **PSD2** — Poseidon sponge with domain separation, input rate 2 (used for key derivation)
+- **PSD4** — Poseidon sponge with domain separation, input rate 4 (used for graph key, sk_prf)
+
+Poseidon is chosen because it's efficient inside SNARKs — since it operates over the same finite field as the circuit, it requires far fewer constraints than non-algebraic hashes like SHA-256.
+
+## Security Properties
+
+| Key | Can Sign | Can Decrypt | Can Prove | Can Scan |
+|---|---|---|---|---|
+| Private Key | Yes | Yes | Yes | Yes |
+| Compute Key | No | No | Yes | No |
+| View Key | No | Yes | No | Yes |
+| Graph Key | No | No | No | Yes |
+| Address | No | No | No | No |
+
+The derivation is one-way at each step — recovering `sk_sig` from `pk_sig` requires solving the discrete logarithm problem on Edwards BLS12.
+
+## Account Creation
+
+Accounts are created entirely offline:
+
+1. Generate a random 32-byte seed
+2. Derive all keys from the seed
+
+No network interaction or registration is needed. This can be done via the [Leo CLI](/build/leo/cli), the [Aleo SDK](/build/sdk), or any tool that implements the derivation scheme above.

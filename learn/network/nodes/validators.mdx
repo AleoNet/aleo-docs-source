@@ -1,0 +1,78 @@
+---
+title: Validators
+sidebar_label: Validators
+sidebar_position: 1
+description: The role of validators in the Aleo network.
+---
+
+# Validators
+
+Validators are the nodes that produce blocks, verify zero-knowledge proofs, and participate in [AleoBFT consensus](/learn/network/consensus). They are the backbone of the Aleo network.
+
+## Role
+
+Validators are responsible for:
+
+- **Verifying ZK proofs** — Checking that transitions were executed correctly without seeing the underlying data
+- **Executing async functions** — Running onchain logic (mapping updates) after proof verification
+- **Producing blocks** — Participating in AleoBFT consensus to commit transactions
+- **Maintaining state** — Storing the ledger, mappings, and encrypted records
+
+## Committee
+
+The active set of validators is called the **committee**, capped at **200 validators**. Membership is determined by total stake — the top 200 by stake are included. Voting power within the committee is proportional to stake.
+
+A validator must meet the following requirements to join the committee:
+
+| Requirement | Value |
+|---|---|
+| Total stake (self-bond + delegations) | 10,000,000 Aleo Credits |
+| Self-bond minimum | 100 Aleo Credits |
+
+If a validator's total stake falls below 10M credits or their self-bond drops below 100 credits, they are removed from the committee.
+
+## Rewards
+
+Validators receive **1/3 of coinbase rewards** as block rewards, distributed proportionally to their stake within the committee. Validators also set a **commission rate** (0–100%) which determines what percentage of delegator rewards they retain.
+
+## Configuration
+
+When bonding as a validator, operators set:
+
+- **Commission rate** — Percentage of delegator rewards kept by the validator
+- **Withdrawal address** — The address where unbonded stake is returned
+- **Open/closed status** — Whether new delegations are accepted
+
+## Staking
+
+Staking on Aleo is handled natively through the `credits.aleo` program. Users can delegate credits to validators to participate in securing the network and earn a share of block rewards.
+
+### Key Parameters
+
+| Parameter | Value |
+|---|---|
+| Delegation minimum | 10,000 credits |
+| Minimum bonded balance | 10,000 credits |
+| Unbonding period | 360 blocks |
+| Max delegators (network-wide) | 100,000 |
+
+### Delegating
+
+Any user can delegate credits to a validator using the `bond_public` function. Delegated stake counts toward the validator's total stake for committee membership and voting power.
+
+- Delegators automatically earn a share of block rewards proportional to their stake, minus the validator's commission
+- A validator must be **open** to new delegations for `bond_public` to succeed
+- The minimum delegation is 10,000 credits
+
+### Unbonding
+
+Stakers can unbond some or all of their stake using `unbond_public`. This starts a **360-block cooldown** (~2.5 hours at 25-second blocks). After the cooldown, anyone can call `claim_unbond_public` to transfer the unbonded credits to the staker's withdrawal address.
+
+- Partial unbonding is allowed, but if the remaining bonded balance falls below 10,000 credits, a full unbond is triggered
+- If a validator's total stake drops below 10M credits, they are removed from the committee
+
+### Withdrawal Address
+
+Each staker has a **withdrawal address** — the destination for unbonded credits. This is set when bonding and can be different from the staking address, allowing operators to separate operational and custodial concerns.
+
+For practical setup instructions, see [Run a Validator](/participate/run-a-node/validator). For a guide to delegating stake, see [Staking](/participate/staking).

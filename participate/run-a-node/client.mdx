@@ -1,0 +1,88 @@
+---
+title: Client
+sidebar_label: Client
+sidebar_position: 3
+description: How to run a client node on the Aleo network.
+---
+
+# Client
+
+Clients serve blockchain data and provide an interface between users and the network. They do not participate in consensus or produce blocks.
+
+## Client Types
+
+### Core Client
+
+Connects directly to validator nodes and verifies network traffic before it reaches validators. Does not expose a REST API.
+
+### Outer Client
+
+Connects to other clients and provers, serving as a bootstrap entry point with a public IP. Exposes a REST API on port 3030.
+
+## Requirements
+
+### Hardware
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| OS | Ubuntu 22.04 LTS, macOS Sonoma+, Windows 11+ | Ubuntu 22.04 LTS |
+| CPU | 24 cores | 32+ cores |
+| RAM | 128 GiB | 192+ GiB |
+| Storage | 2 TB NVMe SSD (PCIe Gen 3+) | 4+ TB NVMe SSD |
+| Network | 250 Mbps symmetric | 250 Mbps symmetric |
+
+### Ports
+
+| Port | Protocol | Purpose | Client Type |
+|------|----------|---------|-------------|
+| 4130 | TCP | P2P communication | Both |
+| 3030 | TCP | REST API | Outer only |
+
+## Setup
+
+### Install snarkOS
+
+```bash
+git clone --branch mainnet --single-branch https://github.com/ProvableHQ/snarkOS.git
+cd snarkOS
+./build_ubuntu.sh
+cargo install --locked --path .
+```
+
+### Start a Core Client
+
+```bash
+snarkos start --client --nodisplay \
+  --node 0.0.0.0:4130 \
+  --peers [peers] \
+  --verbosity 1 \
+  --norest
+```
+
+### Start an Outer Client
+
+```bash
+snarkos start --client --nodisplay \
+  --node 0.0.0.0:4130 \
+  --peers [peers] \
+  --verbosity 1 \
+  --rest 0.0.0.0:3030
+```
+
+## Syncing Ledger Data
+
+For faster initial sync, you can download ledger data directly instead of syncing from the network:
+
+```bash
+# Using gcloud (full sync)
+gcloud storage cp -r gs://aleo-mainnet-snapshots/latest/ /path/to/ledger/
+
+# Using gcloud rsync (incremental)
+gcloud storage rsync -r gs://aleo-mainnet-snapshots/latest/ /path/to/ledger/
+
+# Using wget
+wget -r -np -nH --cut-dirs=2 https://storage.googleapis.com/aleo-mainnet-snapshots/latest/
+
+# Using aria2 (parallel download)
+aria2c -x 16 -s 16 https://storage.googleapis.com/aleo-mainnet-snapshots/latest/
+```

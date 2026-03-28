@@ -1,0 +1,84 @@
+---
+title: Delegated Proving
+sidebar_label: Delegated Proving
+sidebar_position: 5
+description: How proof generation can be offloaded to third parties without compromising privacy.
+---
+
+# Delegated Proving
+
+Generating zero-knowledge proofs is computationally intensive. Delegated proving allows users to offload proof generation to a third-party prover — without giving up control of their funds or exposing their private key.
+
+## How It Works
+
+The process is split into two phases:
+
+### 1. Authorization (User)
+
+The user signs the transaction using their **private key**, producing an `Authorization` object. This is the only step that requires the private key.
+
+```
+Authorization = authorize(private_key, program_id, function_name, inputs)
+```
+
+Fee authorization is created separately and bound to a specific execution:
+
+- **Private fee**: `authorize_fee_private(private_key, credits_record, base_fee, priority_fee, execution_id)`
+- **Public fee**: `authorize_fee_public(private_key, base_fee, priority_fee, execution_id)`
+
+The authorization is cryptographically signed — the signature covers the function ID, all input IDs, the transition view key, and transition commitment. Any modification invalidates it.
+
+After this step, the user has a signed authorization but no proof yet.
+
+### 2. Proving (Prover)
+
+The user sends the `Authorization` to a third-party prover. The prover:
+
+1. Receives the sealed authorization (no private key included)
+2. Executes the program circuit using the authorized inputs
+3. Generates ZK proofs for each transition via Varuna
+4. Assembles the complete transaction with proofs
+
+The prover uses the account's **compute key** `(pk_sig, pr_sig, sk_prf)` — embedded in the authorization's signature — to generate valid proofs.
+
+## What the Prover Sees
+
+The `Authorization` contains a `Request` for each transition, which includes:
+
+| Data | Description |
+|---|---|
+| **All input values in plaintext** | Including private inputs and full record data — necessary for circuit witness construction |
+| **Signer address** | The account executing the transaction |
+| **Compute key** | `(pk_sig, pr_sig, sk_prf)` — embedded in the signature |
+| **`sk_tag`** | The tag secret key (derived from the graph key); can compute [record tags](/learn/advanced/record-scanning#tag-method-requires-view-key) for the signer's records |
+| **`tvk`** | The per-transition view key; can decrypt outputs of this specific transition |
+
+The prover must see plaintext inputs to construct the circuit witnesses — this is inherent to how ZK proof generation works. The zero-knowledge property protects this data from **onchain observers**, but **not from the prover itself**.
+
+## What the Prover Cannot Do
+
+| Action | Why Not |
+|---|---|
+| **Sign new transactions** | Requires `sk_sig` (the private key scalar, not included) |
+| **Modify the transaction** | The authorization is signed; any changes invalidate it |
+| **Redirect funds** | Authorization specifies exact inputs/outputs; the prover cannot change recipients or amounts |
+| **Derive the private key** | Recovering `sk_sig` from `pk_sig = sk_sig × G` is the discrete logarithm problem |
+| **Decrypt other records** | Requires the account view key (not present in the authorization); `tvk` only decrypts the current transition's outputs |
+
+The security guarantee of delegated proving is **integrity** (the prover can't change what's being executed) and **key separation** (the prover can't sign new transactions), not input confidentiality from the prover.
+
+## When to Use Delegated Proving
+
+- **Mobile wallets** — Phones lack the computational power for fast proof generation. Delegated proving makes private transactions practical on mobile devices.
+- **Web applications** — Browser-based apps can delegate proving to a backend service, keeping the user experience responsive.
+- **High-throughput scenarios** — Applications that need to generate many proofs quickly can distribute proving across dedicated infrastructure.
+
+## Privacy Tradeoffs
+
+| Approach | Privacy | Performance |
+|---|---|---|
+| **Local proving** | Maximum — no data leaves the device | Slow on constrained hardware |
+| **Trusted delegated prover** | Prover sees inputs but is trusted not to misuse them | Fast — dedicated proving infrastructure |
+| **Untrusted delegated prover** | Prover sees inputs; integrity is guaranteed but input confidentiality is not | Fast |
+
+For most users, delegated proving to a trusted service (like [Shield Wallet's](/participate/wallets) built-in prover) offers the best tradeoff between usability and privacy.

@@ -1,0 +1,42 @@
+---
+title: Sign Messages
+sidebar_label: Sign Message
+sidebar_position: 3
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Sign Messages
+
+<DemoForm
+  action="Sign"
+  fields={[
+    { type: 'textarea', name: 'message', label: 'Message to Sign', placeholder: 'Enter your message here...' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const signature = await wallet.signMessage(String(values.message));
+    return { signature: new TextDecoder().decode(signature) };
+  }}
+/>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import React, { useCallback } from 'react';
+
+export const SignMessage = () => {
+  const { address, signMessage, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const message = 'Hello, Aleo!';
+    const signature = await signMessage(message);
+    console.log('Signature:', new TextDecoder().decode(signature));
+  }, [address, signMessage, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Sign Message
+    </button>
+  );
+};`}</CopyCodeBlock>

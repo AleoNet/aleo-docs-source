@@ -1,0 +1,89 @@
+---
+title: Transactions
+sidebar_label: Transactions
+sidebar_position: 4
+description: How transactions work on the Aleo network.
+---
+
+# Transactions
+
+Transactions are the top-level unit of interaction with the Aleo network. Every action — deploying a program, executing a function, or transferring credits — is packaged as a transaction.
+
+## Transaction Types
+
+### Execute
+
+The most common type. An execute transaction calls one or more program functions, producing zero-knowledge proofs of correct execution.
+
+An execute transaction contains:
+- One or more **transitions** (individual function calls, up to 32 per transaction)
+- A **fee transition** (one of the 32 slots is reserved for the fee)
+- A ZK proof for each transition
+
+### Deploy
+
+Publishes a new program to the network. A deploy transaction includes the program bytecode, verification keys for each function, and the deployer's signature.
+
+### Fee
+
+A standalone fee transaction, generated when an execute or deploy transaction is **rejected**. The original logic fails, but the fee is still collected to prevent spam.
+
+## Transitions
+
+A **transition** is a single function call within a transaction. Each transition:
+
+- Belongs to a specific program and function
+- Has its own inputs and outputs
+- Produces its own ZK proof
+- Can consume and create records independently
+
+When a program calls another program, each call produces a separate transition. This means a single transaction can span multiple programs while maintaining independent proofs for each step.
+
+### Transition View Key
+
+Each transition generates its own **transition view key (TVK)** — a unique key used to encrypt and decrypt the private inputs and outputs of that specific transition. The TVK is derived from the signer's address and a per-transition random value, so even multiple transitions within the same transaction have independent encryption.
+
+The transition view key is distinct from the account-level [view key](/learn/core-concepts/accounts-and-keys#view-key), which can decrypt all records belonging to the account. A TVK is scoped to a single transition's data. This allows a user to share a TVK with an auditor to reveal the details of a specific function call — without compromising any other activity on the account.
+
+## Transaction Lifecycle
+
+1. **Construction** — The user's device (or SDK) assembles the transaction: signs authorizations, executes transitions locally, and generates ZK proofs.
+2. **Broadcast** — The signed transaction is submitted to the network.
+3. **Mempool** — Validators receive the transaction and place it in the mempool for inclusion in a block.
+4. **Verification** — Validators verify the ZK proofs and execute any finalize logic onchain.
+5. **Commitment** — The transaction is included in a block through AleoBFT consensus.
+
+## Transaction Status
+
+| Status | Description |
+|---|---|
+| **Accepted** | Execution and fee both succeeded. Transaction is confirmed onchain. |
+| **Rejected** | Execution failed (e.g., finalize logic reverted), but the fee was still processed. A separate fee transaction is created. |
+| **Aborted** | Both execution and fee processing failed. The transaction is discarded. |
+
+Rejected transactions still incur fees. This prevents attackers from spamming the network with transactions that intentionally fail.
+
+## Fees
+
+Transaction fees are paid in **Aleo credits** (microcredits). Fees have two components:
+
+### Base Fee
+
+Covers the cost of processing the transaction. Calculated from:
+
+- **Execution/storage cost** — Based on transaction size (linear for small transactions, quadratic for larger ones)
+- **Finalize cost** — Based on the onchain operations performed (mapping reads/writes, hashing, etc.)
+
+For deployments, the base fee also includes namespace cost (shorter program names are more expensive) and synthesis cost (based on circuit complexity).
+
+### Priority Fee
+
+An optional additional fee that gives the transaction higher priority in the mempool. Transactions with priority fees are processed before the standard queue.
+
+### Fee Visibility
+
+Fees can be paid publicly or privately:
+
+- **Public fee** — Deducted from the sender's public `account` mapping balance. The payer's address is visible.
+- **Private fee** — Paid using a private `credits` record. The payer's address is hidden, and a change record is returned.
+- **Sponsored fee** — A separate party can pay the fee on behalf of the transaction sender, using an independent authorization.

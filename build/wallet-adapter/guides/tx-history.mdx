@@ -1,0 +1,43 @@
+---
+title: Transaction History
+sidebar_label: Transaction History
+sidebar_position: 7
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Transaction History
+
+This requires the `OnChainHistory` decrypt permission.
+
+<DemoForm
+  action="Request"
+  fields={[
+    { type: 'text', name: 'programId', label: 'Program ID', placeholder: 'Enter program name' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const history = await wallet.requestTransactionHistory(String(values.programId));
+    return history;
+  }}
+/>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import React, { useCallback } from 'react';
+
+export const RequestTransactionHistory = () => {
+  const { address, requestTransactionHistory, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const history = await requestTransactionHistory('credits.aleo');
+    console.log('Transaction History:', history);
+  }, [address, requestTransactionHistory, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Request Transaction History
+    </button>
+  );
+};`}</CopyCodeBlock>

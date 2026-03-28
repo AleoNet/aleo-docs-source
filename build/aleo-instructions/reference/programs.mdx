@@ -1,0 +1,129 @@
+---
+title: Programs
+sidebar_label: Programs
+sidebar_position: 1
+description: Program structure in Aleo Instructions — program IDs, imports, functions, closures, finalize, and futures.
+---
+
+# Programs
+
+## Program ID
+
+A program ID is declared as `{name}.{network}`. The first character of `name` must be lowercase. `name` can contain lowercase letters, numbers, and underscores. Currently, `aleo` is the only supported network domain.
+
+```aleo
+program hello.aleo;   // valid
+program Foo.aleo;     // invalid — must start lowercase
+program 0foo.aleo;    // invalid — must start with a letter
+```
+
+## Imports
+
+Imports bring declarations from other programs into the current file scope. They must appear before the program declaration.
+
+```aleo
+import foo.aleo;
+
+program hello.aleo;
+```
+
+## Functions
+
+Functions are the primary entrypoints of a program. Calling a function creates a transition that can consume and produce records on-chain.
+
+```aleo
+function foo:
+    input r0 as field.public;
+    input r1 as field.private;
+    add r0 r1 into r2;
+    output r2 as field.private;
+```
+
+**Inputs** are declared as `input {register} as {type}.{visibility};` immediately after the function declaration.
+
+**Outputs** are declared as `output {register} as {type}.{visibility};` at the end of the function body.
+
+Two built-in operands are available inside functions:
+
+| Operand | Type | Description |
+|---------|------|-------------|
+| `self.signer` | `address` | The user address that originated the transition |
+| `self.caller` | `address` | The address of the immediate caller (user or program) |
+
+:::tip
+Use `assert.eq self.caller self.signer;` to restrict a function to direct user calls only. Use `assert.neq self.caller self.signer;` to restrict it to program-to-program calls only.
+:::
+
+**External calls** use the `call` instruction with a program locator:
+
+```aleo
+import foo.aleo;
+
+program bar.aleo;
+
+function call_external:
+    input r0 as u64.private;
+    call foo.aleo/baz r0 into r1;
+    output r1 as u64.private;
+```
+
+## Closures
+
+Closures are internal helper functions that cannot be called directly by users. They cannot return records, make external calls, or use `async`/`await`.
+
+```aleo
+closure foo:
+    input r0 as field;
+    input r1 as field;
+    add r0 r1 into r2;
+    output r2 as field;
+```
+
+Call a closure internally with `call {name} {args} into {register};`.
+
+## Finalize
+
+A `finalize` block immediately follows a function with the same name. It executes on-chain after the zero-knowledge proof is verified. If the finalize block fails, the entire transaction is reverted.
+
+```aleo
+function transfer_public:
+    input r0 as address.public;
+    input r1 as u64.public;
+    async transfer_public self.caller r0 r1 into r2;
+    output r2 as credits.aleo/transfer_public.future;
+
+finalize transfer_public:
+    input r0 as address.public;
+    input r1 as address.public;
+    input r2 as u64.public;
+    get account[r0] into r3;
+    sub r3 r2 into r4;
+    set r4 into account[r0];
+    get.or_use account[r1] 0u64 into r5;
+    add r5 r2 into r6;
+    set r6 into account[r1];
+```
+
+### Futures
+
+Futures represent the on-chain execution call graph produced by `async` calls. They allow programs to compose finalize logic across program boundaries.
+
+```aleo
+// Produce a future
+async add_and_count self.caller into r3;
+output r3 as basic_math.aleo/add_and_count.future;
+
+// Consume a future in finalize
+finalize add_and_subtract:
+    input r0 as basic_math.aleo/add_and_count.future;
+    input r1 as basic_math.aleo/sub_and_count.future;
+    await r0;
+    await r1;
+```
+
+**Rules:**
+1. If a function has a finalize block, it must have exactly one `async` instruction.
+2. The function's last output must be a future.
+3. All futures from `call` instructions must be passed to `async` in creation order.
+4. All futures in a finalize must be `await`-ed in the order they were specified.
+5. All `call` instructions must precede the `async` instruction.

@@ -1,0 +1,50 @@
+---
+title: Request Records
+sidebar_label: Records
+sidebar_position: 4
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Request Records
+
+<DemoForm
+  action="Fetch"
+  fields={[
+    { type: 'text', name: 'programId', label: 'Program ID', placeholder: 'Enter program name' },
+    { type: 'checkbox', name: 'includePlaintext', label: 'Include plaintext on each record' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const records = await wallet.requestRecords(String(values.programId), !!values.includePlaintext);
+    return records;
+  }}
+>
+  <p style={{ fontSize: '0.8rem', color: 'var(--ifm-color-emphasis-500)', fontStyle: 'italic' }}>
+    Some wallets may not support the plaintext option.
+  </p>
+</DemoForm>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import React, { useCallback } from 'react';
+
+export const RequestRecords = () => {
+  const { address, requestRecords, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const records = await requestRecords('credits.aleo');
+    console.log('Records:', records);
+
+    // With plaintext (requires appropriate decrypt permission)
+    const withPlaintext = await requestRecords('credits.aleo', true);
+    console.log('Records with plaintext:', withPlaintext);
+  }, [address, requestRecords, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Request Records
+    </button>
+  );
+};`}</CopyCodeBlock>

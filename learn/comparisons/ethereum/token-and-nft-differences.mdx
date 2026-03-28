@@ -1,0 +1,651 @@
+---
+title: "Token & NFT Differences"
+sidebar_label: "Token & NFT Differences"
+sidebar_position: 3
+description: Key differences between tokens and NFTs on Aleo vs Ethereum.
+---
+
+# Token & NFT Differences
+
+
+## Token Standards
+
+## Introduction
+
+The [Token Registry Program (ARC-21)](../standards/00_token_registry.md) serves as the standard "hub" that all tokens and DeFi programs interface with, providing interoperability between new tokens and DeFi programs without requiring program re-deployment. This approach was chosen because on Aleo, all imported programs must be known and deployed before the importing program, and dynamic cross-program calls are not currently supported, which makes composability difficult to implement. However, dynamic dispatch is currently in development and will enable more flexible program interactions in the future.
+
+## Quick-glance Comparison
+
+| Feature | ERC-20 | ARC-21 Token Registry |
+|---------|-------|-------------------|
+| Token Creation | Deploy new contract | Register with registry |
+| State Management | Per contract | Centralized registry |
+| Transfer Mechanism | Direct contract call | Registry program call |
+| Privacy | None | Built-in private transfers |
+| Approval Flow | Required | Optional |
+| Token Metadata | In contract | In registry |
+| Supply Management | Per contract | Centralized registry |
+
+## Architectural Differences
+
+### Program Structure
+
+**ERC-20**
+- Each token is deployed as a separate smart contract
+- Requires approval flow for token transfers
+- New smart contract deployment needed for each token
+
+**ARC-21 Token Registry**
+- Single program (Token Registry) manages all tokens
+- No separate approval flow needed for basic transfers
+- New tokens are created through registration, not deployment
+
+### State Management
+
+**ERC-20**
+- State is stored within each token contract
+- Direct state access within the contract
+- Only supports public visibility for all states
+
+**ARC-21 Token Registry**
+- State is managed through the registry program
+- State access through API endpoints or `mappings::get()` calls within async functions
+- Supports both public state visibility with mappings and private state with records
+
+## Functional Differences
+
+### Token Creation
+
+**ERC-20**
+```solidity
+contract MyToken is ERC20 {
+    constructor(string memory name, string memory symbol) ERC20(name, symbol) {
+        _mint(msg.sender, 1000000 * 10 ** decimals());
+    }
+}
+```
+
+**ARC-21 Token Registry**
+```leo
+// Register a new token
+register_token(
+    token_id: field,
+    name: u128,
+    symbol: u128,
+    decimals: u8,
+    max_supply: u128,
+    external_authorization_required: bool,
+    external_authorization_party: address
+)
+```
+
+#### External Authorization
+The ARC-21 Token Registry supports an optional external authorization system where a designated party (usually a program) can control token spending permissions with time-limited approvals. This feature enforces extra requirements on tokens before they can be transferred, such as time-locked tokens, tokens with vesting schedules or spending limits, compliance requirements, and more. The authorization party can be updated later using `update_token_management`.
+
+`prehook_public` and `prehook_private` are both functions that the `external_authorization_party` can use to unlock token transfers once the extra requirements have been fulfilled.
+
+### Token Transfer
+
+**ERC-20**
+```solidity
+function transfer(address to, uint256 amount) public returns (bool)
+function transferFrom(address from, address to, uint256 amount) public returns (bool)
+```
+
+**ARC-21 Token Registry**
+```leo
+// Public transfer from function caller
+async transition transfer_public(
+    public token_id: field,
+    public recipient: address,
+    public amount: u128
+) -> Future
+
+// Public transfer from transaction signer
+async transition transfer_public_as_signer(
+    public token_id: field,
+    public recipient: address,
+    public amount: u128
+) -> Future
+
+// Private transfer
+async transition transfer_private(
+    recipient: address,
+    amount: u128,
+    input_record: Token
+) -> (Token, Token, Future)
+
+// Public transfer by an approved spender
+async transition transfer_from_public(
+    public token_id: field,
+    public owner: address,
+    public recipient: address,
+    public amount: u128
+) -> Future
+
+// Convert public balance to private Token
+async transition transfer_public_to_private(
+    public token_id: field,
+    recipient: address,
+    public amount: u128,
+    public external_authorization_required: bool
+) -> (Token, Future)
+
+// Convert public balance to private Token by an approved spender
+async transition transfer_from_public_to_private(
+    public token_id: field,
+    public owner: address,
+    recipient: address,
+    public amount: u128,
+    public external_authorization_required: bool
+) -> (Token, Future)
+
+// Conver private Token to public balance
+async transition transfer_private_to_public(
+    public recipient: address,
+    public amount: u128,
+    input_record: Token
+) -> (Token, Future)
+```
+
+#### Privacy Features
+
+The ARC-21 Token Registry provides additional privacy features not available in ERC-20:
+
+1. **Private Transfers**: Ability to transfer tokens privately using the `transfer_private` function
+2. **Public to Private Conversion**: Convert public tokens to private using `transfer_public_to_private`
+3. **Private to Public Conversion**: Convert private tokens to public using `transfer_private_to_public`
+
+### Token Minting
+
+**ERC-20**
+```solidity
+function mint(address to, uint256 amount) public onlyOwner {
+    _mint(to, amount);
+}
+```
+
+**ARC-21 Token Registry**
+```leo
+// Public minting
+async transition mint_public(
+    public token_id: field,
+    public recipient: address,
+    public amount: u128,
+    public authorized_until: u32
+) -> Future
+
+// Private minting
+async transition mint_private(
+    public token_id: field,
+    recipient: address,
+    public amount: u128,
+    public external_authorization_required: bool,
+    public authorized_until: u32
+) -> (Token, Future)
+```
+
+The ARC-21 Token Registry provides both public and private minting capabilities. Access to minting is controlled through roles that can be assigned using `set_role` and revoked using `remove_role`. Only addresses with `MINTER_ROLE` or `SUPPLY_MANAGER_ROLE` can mint tokens if not the admin.
+
+### Token Burning
+
+**ERC-20**
+```solidity
+function burn(uint256 amount) public {
+    _burn(msg.sender, amount);
+}
+```
+
+**ARC-21 Token Registry**
+```leo
+// Public burning
+async transition burn_public(
+    public token_id: field,
+    public owner: address,
+    public amount: u128
+) -> Future
+
+// Private burning
+async transition burn_private(
+    input_record: Token,
+    public amount: u128
+) -> (Token, Future)
+```
+
+The ARC-21 Token Registry supports both public and private burning mechanisms. Similar to minting, burning permissions are managed through roles using `set_role` and `remove_role`. Only addresses with `BURNER_ROLE` or `SUPPLY_MANAGER_ROLE` can burn tokens if not the admin.
+
+### Token Approval
+
+**ERC-20**
+```solidity
+function approve(address spender, uint256 amount) public returns (bool)
+function allowance(address owner, address spender) public view returns (uint256)
+```
+
+**ARC-21 Token Registry**
+```leo
+// Public approval
+async transition approve_public(
+    public token_id: field,
+    public spender: address,
+    public amount: u128
+) -> Future
+
+// Revoke public unapproval
+async transition unapprove_public(
+    public token_id: field,
+    public spender: address,
+    public amount: u128
+) -> Future
+```
+
+### Balance and Supply Queries
+
+**ERC-20**
+```solidity
+function balanceOf(address account) public view returns (uint256)
+function totalSupply() public view returns (uint256)
+```
+
+**ARC-21 Token Registry**
+```bash
+# Get balance via RPC endpoint
+GET /{network}/program/token_registry.aleo/mapping/balances/{token_id}_{account}
+
+# Get total supply via RPC endpoint
+GET /{network}/program/token_registry.aleo/mapping/registered_tokens/{token_id}
+```
+
+The ARC-21 Token Registry uses RPC endpoints to query balances and supply by accessing the program's mappings directly. This approach allows for efficient querying of on-chain state without requiring a transaction. The balance is stored in the `balances` mapping with a composite key of `token_id` and `account`, while the supply information is stored in the `registered_tokens` mapping.
+
+## Summary and Future
+
+The ARC-21 Token Registry provides a more centralized and feature-rich approach to token management compared to ERC-20. While ERC-20 requires separate contracts for each token, the Token Registry manages all tokens through a single program, providing additional features like privacy and role-based access control. This design choice makes it easier to implement DeFi applications and ensures better interoperability between different tokens on the Aleo blockchain.
+
+With the future implementation of dynamic dispatch, the ARC-20 standard will provide a more familiar approach for Ethereum developers, allowing different individual token programs to be called at runtime rather than being strictly defined.
+
+## NFT Standards
+
+
+## Introduction
+
+ERC-721 is the standard for non-fungible tokens on Ethereum, but every piece of state (owner, metadata, price) is public.  
+
+ARC-721, the Aleo variant implemented in Leo, maintains the same ergonomics while allowing you to choose which parts remain private and which are stored on-chain. The standard originated from the [ARC-721 proposal](https://github.com/ProvableHQ/ARCs/discussions/79) and was officially approved through community voting on [Aleo Governance](https://vote.aleo.org/p/721). The standard leverages Aleo's unique privacy features to provide enhanced functionality compared to ERC-721. For example, every NFT in ARC-721 has two separate privacy controls: one for ownership and one for the NFT data itself, with configurable privacy settings for both. For more detailed information about the NFT standards and implementation details, please refer to the [NFT Standards documentation](../standards/01_nft_standards.md).
+
+To address program composability challenges on Aleo, there is a proposed [NFT Registry Program (ARC-722)](https://github.com/ProvableHQ/ARCs/discussions/80) that would serve as a central hub for NFT collections, similar to how the [Token Registry Program](../standards/00_token_registry.md) works for fungible tokens. This registry would allow multiple implementations with different data structures, identified by the unique pair (registry_program_id, collection_id). Note that ARC-722 is currently in the proposal stage and has not yet been voted on or approved by the Aleo community.
+
+## Quick-glance Comparison
+
+| Function                     | **ERC-721 (Ethereum)**             | **ARC-721 (Aleo)**                                                                                            |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Owner visibility**         | Always public                      | Optional — private record *or* public mapping                                                                 |
+| **Metadata visibility**      | Whatever you publish is visible    | Private, public or hybrid (mixed on-/off-chain)                                                               |
+| **Unique identifier**        | Incremental `tokenId uint256`      | Commitment `field = hash(data) ⊕ edition` (opaque)                                                            |
+| **Transfer functions**       | `transferFrom`, `safeTransferFrom` | `transfer_private`, `transfer_private_to_public`, `transfer_public_as_signer`, `transfer_public_to_private`   |
+| **Approvals**                | `approve`, `setApprovalForAll`     | `approve_public`, `set_for_all_approval`                                                                      |
+| **Burn & re-mint privately** | Not possible without trace         | `update_edition_private` re-obfuscates commit                                                                 |
+
+## Architectural Differences
+
+### State Management
+
+**ERC-721**
+```solidity
+contract ERC721 {
+    // Token name
+    string private _name;
+
+    // Token symbol
+    string private _symbol;
+
+    // Mapping from token ID to owner address
+    mapping(uint256 => address) private _owners;
+
+    // Mapping owner address to token count
+    mapping(address => uint256) private _balances;
+
+    // Mapping from token ID to approved address
+    mapping(uint256 => address) private _tokenApprovals;
+}
+```
+
+**ARC-721**
+
+Below is the example data structure of an ARC-721 NFT program, using record as private storage and mappings as public storage. Name of the structs don't necessarily have to match `data` and `attribute`, allowing to import several NFT collection program without shadowing:
+
+```leo
+record NFT {
+    private owner: address,   // hidden unless revealed
+    private data: data,      // on-chain struct (can mirror off-chain JSON)
+    private edition: scalar,  // as obfuscator to store NFT commitment on-chain
+}
+
+// NFT data is always private and store in NFTView even if ownership is made public
+// is_view is always true, to differentiate NFTView from NFT in plaintext representations of records
+record NFTView {
+    private owner: address,
+    private data: data,
+    private edition: scalar,
+    public is_view: bool
+}
+
+// Example attribute, optional
+struct attribute {
+    trait_type: [field; 4],
+    _value: [field; 4],
+}
+
+struct data {
+    metadata: [field; 4], // URI of offchain metadata JSON
+    // (optional) name: [field; 4],
+    // (optional) image: [field; 16],
+    // (optional) attributes: [attribute; 4],
+    // (optional) ...
+}
+
+// On-chain NFT data storage if made public 
+struct nft_content {
+    data: data,
+    edition: scalar
+}
+mapping nft_contents: field => nft_content; // commit(data, edition) => (data, edition)
+
+// Approval data structure
+struct Approval {
+    collection_id: field,
+    approver: address,
+    spender: address,
+}
+mapping for_all_approvals: field => bool     // approval hash → bool
+mapping nft_approvals:     field => field    // commit → approval hash
+```
+
+### String Management
+
+Since Leo doesn't have a native string type, strings are managed using arrays of `field` elements:
+
+```leo
+// Example attribute, optional
+struct attribute {
+    trait_type: [field; 4],
+    _value: [field; 4],
+}
+
+struct data {
+    metadata: [field; 4], // URI of offchain metadata JSON
+    // (optional) name: [field; 4],
+    // (optional) image: [field; 16],
+    // (optional) attributes: [attribute; 4],
+    // (optional) ...
+}
+```
+
+Key points about string management in Leo:
+- The array length can be adjusted based on the maximum number of characters needed
+- Fields are used instead of u128 because they offer approximately twice the amount of data for the same constraints
+- This approach is particularly useful for storing metadata URIs and other string data in NFTs
+- For JavaScript/TypeScript applications, an example [utility](https://github.com/zsociety-io/aleo-standard-programs/blob/main/arc721/utils/strings.js) is available in the ARC-721 implementation to convert between JavaScript strings and Aleo plaintexts
+
+### NFT Identifier
+
+**ERC-721**
+
+In ERC-721, NFTs are identified by a simple incremental `uint256 tokenId`.
+
+**ARC-721**
+
+NFT commit is used to identify each unique NFT in ARC-721:
+
+```leo
+mapping nft_commits: field => bool; // NFT commit => NFT exists or has existed
+
+inline commit_nft(
+    nft_data: data,
+    nft_edition: scalar
+) -> field {
+    let data_hash: field = BHP256::hash_to_field(nft_data);
+    let commitment: field = BHP256::commit_to_field(data_hash, nft_edition);
+    return commitment;
+}
+```
+
+### NFT Creation and Structure
+
+**ERC-721**
+
+ERC-721 provides a standard minting function with optional extensions for custom capabilities.
+
+```solidity
+contract MyNFT is ERC721 {
+    constructor(string memory name, string memory symbol) ERC721(name, symbol) {}
+    
+    function mint(address to, uint256 tokenId) public {
+        _mint(to, tokenId);
+    }
+}
+```
+
+**ARC-721**  
+
+ARC-721 provides flexibility in defining custom NFT creation logic as the NFT program is deployed by developers. The standard implementation includes functions for minting NFTs with different privacy settings:
+
+```leo
+// Mints a private NFT
+// Returns the NFT record that representing ownership and contains NFT data.
+async transition mint_private(
+    admin_nft: nft_records.aleo/NFT,
+    private recipient: address,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> (nft_records.aleo/NFT, Future) 
+
+// Mints a private NFT, verifying admin rights during finalization publicly.
+// Returns the NFT record that representing ownership and contains NFT data.
+async transition mint_private_as_public(
+    private recipient: address,
+    private collection_id: field,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> (nft_records.aleo/NFT, Future)
+
+// Mints a public NFT, with private admin as authorization.
+// Returns NFTView record that contains private NFT data, ownership is stored publicly on-chain.
+async transition mint_public_as_private(
+    admin_nft: nft_records.aleo/NFT,
+    public recipient: address,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> (nft_records.aleo/NFTView, Future)
+
+// Mints a public NFT
+// Returns NFTView record that contains private NFT data, ownership is stored publicly on-chain.
+async transition mint_public(
+    public recipient: address,
+    public collection_id: field,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> (nft_records.aleo/NFTView, Future)
+
+// Make a NFT data public
+async transition publish_nft_content(
+    public nft_data: Data,
+    public nft_edition: scalar,
+) -> Future
+```
+
+### Transfer Mechanisms
+
+**ERC-721**
+```solidity
+function transferFrom(address from, address to, uint256 tokenId) public
+function safeTransferFrom(address from, address to, uint256 tokenId) public
+```
+
+**ARC-721**
+```leo
+// Private transfer
+transition transfer_private(
+    private nft: NFT,
+    private to: address,
+) -> NFT
+
+// Public transfer from function caller (msg.sender)
+async transition transfer_public(
+    private nft_data: data,
+    private nft_edition: scalar,
+    public to: address,
+) -> (NFTView, Future)
+
+// Public transfer from transaction signer (tx.origin)
+async transition transfer_public_as_signer(
+    private collection_id: field,
+    private nft_data: Data,
+    private nft_edition: scalar,
+    public recipient: address,
+) -> (NFTView, Future)
+
+// Public transfer by an approved spender
+async transition transfer_from_public(
+    public from: address,
+    public to: address,
+    private nft_data: data,
+    private nft_edition: scalar,
+) -> (NFTView, Future)
+
+// Convert private NFT ownership to public NFT ownership
+async transition transfer_private_to_public(
+    nft: nft_records.aleo/NFT,
+    public recipient: address,
+) -> (nft_records.aleo/NFTView, Future)
+
+// Convert public NFT ownership to private NFT ownership
+async transition transfer_public_to_private(
+    private nft_data: data,
+    private nft_edition: scalar,
+    private to: address,
+) -> (NFT, Future)
+
+// Convert public NFT ownership to private NFT ownership by an approved sender
+async transition transfer_from_public_to_private(
+    private collection_id: field,
+    public from: address,
+    public recipient: address,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> (NFT, Future)
+```
+
+#### Transfer flows side by side
+
+| **Transfer Flow**       | **ERC-721 (Solidity)**              | **ARC-721 (Leo)**                                                                | **Privacy Level**                                            |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| **Private → Private**   | ❌ Not Supported                     | `transfer_private`                                                                         | Fully private — no public trace                                |
+| **Private → Public**    | ❌ Not Supported                     | `transfer_private_to_public`           | Owner becomes visible; content stay hidden in `NFTView`                 |
+| **Public → Public**     | `transferFrom` / `safeTransferFrom` | `transfer_public` (via `self.caller`) `transfer_public_as_signer` (via `self.signer`)   | Matches ERC-721 behavior with added flexibility                |
+| **Public → Private**    | ❌ Not Supported                     | `transfer_public_to_private`   `transfer_from_public_to_private`  | Ownership becomes private; asset vanishes from public registry |
+| **Public (by Spender)** | `transferFrom` with `approve()`     | `transfer_from_public`   `transfer_from_public_to_private`  | Approved delegated transfers, public or private                |
+
+### Approval System
+
+**ERC-721**
+```solidity
+function approve(address to, uint256 tokenId) public
+function setApprovalForAll(address operator, bool approved) public
+```
+
+**ARC-721**
+```leo
+// Collection-wide approval
+async transition set_for_all_approval(
+    private spender: address,
+    public new_value: bool,
+) -> Future
+
+// Individual NFT approval
+async transition approve_public(
+    private spender: address,
+    private nft_data: data,
+    private nft_edition: scalar,
+) -> Future
+
+// Revoke approval
+async transition unapprove_public(
+    private collection_id: field,
+    private nft_data: Data,
+    private nft_edition: scalar,
+) -> Future
+```
+
+## Settings
+
+ARC-721 also recommended standard setting for collection:
+
+```leo
+mapping general_settings: u8 => field;  // Setting index => Setting value
+```
+
+- `0u8` - Amount of mintable NFTs (all editions)
+- `1u8` - Number of total NFTs (first-editions) that can be minted
+- `2u8` - Symbol for the NFT
+- `3u8` - Base URI for NFT, part 1
+- `4u8` - Base URI for NFT, part 2
+- `5u8` - Base URI for NFT, part 3
+- `6u8` - Base URI for NFT, part 4
+- `7u8` - Admin address hash
+
+## Edition
+ARC-721 introduces the edition field as a mandatory scalar inside every NFT record. The reason for using edition is three-fold:
+
+**Privacy salt** – edition is mixed with the BHP256 hash of the NFT's data to form
+`nft_commit = BHP256::commit_to_field(BHP256::hash_to_field(data), edition)`.
+This blinding factor prevents brute force attacks that attempt to determine if two commits contain the same underlying data.
+
+**Uniqueness anchor** – Because the commit depends on edition, any change (even when
+data is identical) produces a brand-new nft_commit, guaranteeing each token is non-fungible.
+
+**Re-obfuscation** –
+Owners may "rotate" privacy by choosing a fresh random scalar and calling `update_edition_private`, breaking on-chain linkage to prior transfers.
+
+## Publishing (and re-hiding) content
+
+When an NFT's data should become public, the owner calls:
+
+```leo
+transition publish_nft_content(nft_data, nft_edition)
+```
+
+which copies the cleartext struct into:
+
+```leo
+mapping nft_contents: field => nft_content;
+```
+
+If you later need to hide it again:
+
+1. Bring the NFT **private** with `transfer_public_to_private`.
+2. Call `update_edition_private` to roll the commitment.
+
+
+## Privacy Features
+
+The ARC-721 standard provides several privacy-enhancing features:
+
+1. **Private Ownership**
+   - NFTs can be held privately using Aleo records
+   - Ownership can be verified without revealing the owner's identity
+   - Supports conversion between private and public ownership states
+
+2. **Private Data**
+   - NFT data is kept private by default
+   - Optional data publication through `publish_nft_content`
+
+3. **Edition-based Privacy**
+   - Each NFT has a unique edition number (scalar)
+   - Editions enable privacy while maintaining uniqueness
+   - Supports edition updates for re-obfuscation
+
+4. **Flexible Visibility**
+   - `NFTView` record type for public ownership with private data
+   - `NFT` record type for fully private ownership
+   - Built-in conversion functions between states

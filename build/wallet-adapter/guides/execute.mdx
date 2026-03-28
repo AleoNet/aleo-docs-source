@@ -1,0 +1,54 @@
+---
+title: Execute Transactions
+sidebar_label: Execute
+sidebar_position: 1
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Execute Transactions
+
+<DemoForm
+  action="Execute"
+  fields={[
+    { type: 'text', name: 'programId', label: 'Program ID', placeholder: 'Enter program name' },
+    { type: 'text', name: 'functionName', label: 'Function Name', placeholder: 'Enter function name' },
+    { type: 'textarea', name: 'inputs', label: 'Inputs', placeholder: 'Input arguments separated by a newline', helperText: 'Input arguments separated by a newline. Objects and arrays can span multiple lines.' },
+    { type: 'number', name: 'fee', label: 'Fee', placeholder: 'Fee (in microcredits)' },
+    { type: 'checkbox', name: 'privateFee', label: 'Pay fee privately' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const result = await wallet.executeTransaction({
+      program: values.programId,
+      function: values.functionName,
+      inputs: String(values.inputs).split('\n').filter(Boolean),
+      fee: Number(values.fee),
+      privateFee: !!values.privateFee,
+    });
+    if (result?.transactionId) {
+      const status = await wallet.transactionStatus(result.transactionId);
+      return { transactionId: result.transactionId, status: status.status };
+    }
+    return result;
+  }}
+/>
+
+<CopyCodeBlock>{`
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+
+const { executeTransaction, transactionStatus } = useWallet();
+
+  // Execute a transaction
+  const result = await executeTransaction({
+    program: 'credits.aleo',
+    function: 'bond_validator',
+    inputs: ['arg1', 'arg2'],
+    fee: 100000,
+  });
+
+// Poll for transaction status
+const status = await transactionStatus(result.transactionId);
+console.log('Status:', status.status);
+console.log('On-chain TX ID:', status.transactionId);
+
+`}</CopyCodeBlock>

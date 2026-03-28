@@ -1,0 +1,68 @@
+---
+title: Finalize Operations
+sidebar_label: Finalize Operations
+sidebar_position: 5
+toc_min_heading_level: 2
+toc_max_heading_level: 3
+description: Finalize-only operations for Aleo Instructions — mapping operations, branching, await, and randomness.
+---
+
+# Finalize Operations
+
+The following operations are **only** available inside `finalize` blocks. All [standard](standard-operations) and [cryptographic](cryptographic-operations) operations are also available in finalize.
+
+## Operands
+
+| Operand | Type | Description |
+|---------|------|-------------|
+| `block.height` | `u64` | Height of the current block |
+| `block.timestamp` | `i64` | Unix timestamp of the current block |
+| `network.id` | `u64` | Network ID (`0` = Mainnet, `1` = Testnet, `2` = Canary) |
+| `edition` | `u16` | Program version number (starts at `0`, increments by 1 per upgrade) |
+| `checksum` | `[u8; 32u32]` | SHA3-256 hash of the program string |
+| `program_owner` | `address` | Address that submitted the deployment transaction |
+
+:::note
+`edition`, `checksum`, and `program_owner` can reference other programs via `Program::edition(credits.aleo)`, `Program::checksum(foo.aleo)`, etc. The target program must be imported.
+:::
+
+:::warning
+Programs deployed before upgradability was introduced do not have a `program_owner`. Attempting to access it will result in a runtime error.
+:::
+
+## Mapping Operations
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| `contains` | `contains map[key] into r;` | Check if a key exists in a mapping |
+| `contains.dynamic` | `contains.dynamic map[key] into r;` | Check key existence in a dynamically-resolved mapping |
+| `get` | `get map[key] into r;` | Get a value from a mapping |
+| `get.dynamic` | `get.dynamic map[key] into r;` | Get from a dynamically-resolved mapping |
+| `get.or_use` | `get.or_use map[key] default into r;` | Get a value or use a default |
+| `get.or_use.dynamic` | `get.or_use.dynamic map[key] default into r;` | Get from dynamic mapping or use default |
+| `set` | `set value into map[key];` | Set a value in a mapping |
+| `remove` | `remove map[key];` | Remove a key-value pair |
+
+External mappings can be read using a program locator:
+
+```aleo
+get credits.aleo/account[aleo1...] into r0;
+get.or_use credits.aleo/account[aleo1...] 0u64 into r1;
+```
+
+## Control Flow
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| `await` | `await r0;` | Evaluate a future |
+| `position` | `position label;` | Declare a branch target |
+| `branch.eq` | `branch.eq r0 r1 to label;` | Branch if equal (forward only) |
+| `branch.neq` | `branch.neq r0 r1 to label;` | Branch if not equal (forward only) |
+
+## Randomness
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| `rand.chacha` | `rand.chacha [seed1] [seed2] into r as type;` | Generate a random value using ChaCha20 |
+
+Supported output types: `address`, `boolean`, `field`, `group`, `i8`–`i128`, `u8`–`u128`, `scalar`. Up to two optional seeds may be provided.

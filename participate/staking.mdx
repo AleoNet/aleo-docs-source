@@ -1,0 +1,81 @@
+---
+title: Staking
+sidebar_label: Staking
+sidebar_position: 3
+description: How to stake on the Aleo network.
+---
+
+# Staking
+
+
+Native staking on Aleo lets you earn rewards by delegating your ALEO credits to a validator. You don't need to run a node — just bond your credits to an active validator and earn a share of the block rewards.
+
+The Aleo Network Foundation provides an official portal to help you get started: [staking.aleo.org](staking.aleo.org).  
+
+![Native Staking](/img/native_staking.png)
+
+
+If you'd like to learn how to stake manually, keep reading below.
+
+## Delegating
+
+You can delegate to single validator at a time.
+
+### Choose a Validator
+
+Before delegating, evaluate validators based on the following criteria:
+
+- **Open to delegation** — the validator's `is_open` flag must be `true` in the `committee` mapping. Closed validators do not accept new delegations.
+- **Commission rate** — the percentage of rewards the validator keeps before distributing to delegators. Lower commission means more rewards for you, but extremely low rates may indicate an unsustainable operation. Commission is set when the validator joins and can be found in the `committee` mapping.
+- **Total stake** — a validator must have at least 10,000,000 ALEO in total stake to participate in consensus. Validators well above this threshold are less likely to fall below the minimum and be removed from the committee. Check the `delegated` mapping for current totals.
+- **Uptime and reliability** — validators that are frequently offline miss blocks and produce fewer rewards for their delegators. Review validator performance on the [Provable Explorer](https://explorer.provable.com/).
+- **Self-bond ratio** — validators with a meaningful self-bond have more skin in the game. A higher self-bond signals the operator is invested in running the node reliably.
+
+These on-chain mappings can be queried via the [Provable Explorer](https://explorer.provable.com/) or the [API](/build/api).
+
+### Bond
+
+```bash
+credits.aleo/bond_public <validator_address> <withdrawal_address> <amount_in_microcredits>
+```
+
+- `validator_address` — the validator you're delegating to
+- `withdrawal_address` — the address that will receive your stake when you unbond (can be the same as your staker address)
+- `amount_in_microcredits` — the amount to bond (1 ALEO = 1,000,000 microcredits)
+
+### Top Up
+
+Run the same `bond_public` command again to add more stake to your existing bond. You cannot change validators without first unbonding.
+
+
+## Withdrawing Stake
+
+Withdrawing is a two-step process with a 360-block cooldown.
+
+### Unbond
+
+```bash
+credits.aleo/unbond_public <staker_address> <amount_in_microcredits> 
+```
+
+If the remaining bonded amount would drop below 10,000 ALEO, the full bond is unbonded.
+
+### Claim
+
+After 360 blocks have passed, claim the unbonded credits:
+
+```bash
+credits.aleo/claim_unbond_public <staker_address>
+```
+
+Anyone can call `claim_unbond_public` on behalf of a staker once the unbonding period has elapsed.
+
+
+## Key Numbers
+
+| Parameter | Value |
+|-----------|-------|
+| Minimum delegation | 10,000 ALEO |
+| Minimum to maintain bond | 10,000 ALEO |
+| Unbonding period | 360 blocks |
+| Commission | Set by each validator (0–100%) |

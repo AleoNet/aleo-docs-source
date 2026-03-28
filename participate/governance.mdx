@@ -1,0 +1,75 @@
+---
+title: Governance
+sidebar_label: Governance
+sidebar_position: 5
+description: How governance works on the Aleo network.
+---
+
+# Governance
+
+![Governance](/img/governance.png)
+
+Governance of the Aleo network is driven by **Aleo Request for Comments (ARCs)** — formal proposals for protocol, network, application, and meta-level changes. ARCs are discussed on GitHub, voted on through stake-weighted governance, and implemented in snarkVM, snarkOS, or Leo.
+
+**Governance Site:** [vote.aleo.org](https://vote.aleo.org/)
+
+**ARCs Repository:** [github.com/ProvableHQ/ARCs](https://github.com/ProvableHQ/ARCs)
+
+
+## Proposal Lifecycle
+
+An ARC progresses through the following statuses:
+
+1. **Draft** — Under development. Anyone can submit a draft by opening a [GitHub Discussion](https://github.com/ProvableHQ/ARCs/discussions/categories/arcs) using the [ARC-0000 template](https://github.com/ProvableHQ/ARCs/tree/master/arc-0000) and filing a Pull Request.
+2. **Active** — A maintainer promotes the ARC once it has a reference implementation and is ready for review.
+3. **Decision** — A formal vote is created on [vote.aleo.org](https://vote.aleo.org/). The community votes.
+4. **Accepted** — The vote passes and the PR is merged. If rejected, the ARC reverts to Draft.
+5. **Final** — Implementation is complete and incorporated into the Aleo network.
+6. **Living** — For proposals intended to be continuously updated (e.g., ARC-0001, ARC-0002).
+
+ARCs can also be **Withdrawn** by the author or **Deprecated** when superseded by a newer proposal.
+
+### Proposal Format
+
+Each proposal must include the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `proposal_id` | Unique identifier |
+| `voting_window` | Start and end block heights |
+| `snapshot_height` | Block used to lock voting power |
+| `quorum` | Minimum participation threshold |
+| `pass_threshold` | Stake percentage required to pass |
+| `domain_string` | Signature domain (e.g., `aleo-gov-v1`) |
+
+All parameters are fixed once voting begins and cannot be changed mid-vote.
+
+## Voting
+
+Governance voting follows a **stake-weighted** model defined in [ARC-0007](https://github.com/ProvableHQ/ARCs/discussions/99).
+
+### Roles
+
+| Role | Description |
+|------|-------------|
+| Proposers | Submit a proposal using the GitHub template |
+| Validators | Identified on-chain; vote by signing structured payloads |
+| Delegators | Stake to validators; automatically follow their validator's vote or submit one override |
+| Governance Maintainers | Review proposals, run snapshot/tally tools, publish results |
+
+### How Votes Work
+
+- Votes are weighted by **staked ALEO** at a snapshot block height
+- Only bonded/staked ALEO counts — unstaked tokens are excluded
+- Vote options: **YES**, **NO**, or **ABSTAIN**
+
+### Quorum and Thresholds
+
+- **Quorum:** 66.67% (2/3) of total network stake must participate
+- **Pass threshold:** specified per-proposal (typically 66%)
+- All parameters (voting window, snapshot height, thresholds) are fixed once a vote opens
+
+### Transparency
+
+Final tallies include total stake for each option, quorum status, validator and delegator vote receipts, signed payloads, and snapshot data. Results are published in canonical JSON format to GitHub, along with a reproducibility toolkit so anyone can independently verify results.
+

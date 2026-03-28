@@ -1,0 +1,52 @@
+---
+title: Overview
+sidebar_label: Overview
+sidebar_position: 1
+description: An overview of Aleo Instructions, the low-level language executed by the Aleo VM.
+---
+
+# Aleo Instructions
+
+Aleo Instructions is the low-level, assembly-like language executed by the Aleo Virtual Machine (AVM). All **[Leo](/build/leo/language/overview)** programs compile to Aleo Instructions, which are then compiled to AVM bytecode.
+
+## What are Aleo Instructions?
+
+Aleo programs are files with a `.aleo` extension that contain Aleo Instructions — a register-based, statically typed instruction set. Each instruction operates on typed registers (`r0`, `r1`, ...) and produces deterministic outputs that can be proven in zero-knowledge.
+
+```aleo
+program hello.aleo;
+
+function main:
+    input r0 as u32.public;
+    input r1 as u32.private;
+    add r0 r1 into r2;
+    output r2 as u32.private;
+```
+
+## When to Use
+
+Most developers should write programs in **[Leo](/build/leo/language/overview)**, which provides a higher-level syntax with familiar programming constructs. Aleo Instructions are useful when you need:
+
+- **Fine-grained circuit control** — direct management of registers and constraints for optimization.
+- **Compiler development** — implementing a compiler that targets the Aleo VM from a language other than Leo.
+- **Debugging** — reading the compiled output of a Leo program to understand what the VM executes.
+- **Understanding the VM** — learning how the Aleo VM processes programs at the lowest level.
+
+## Compliation Pipeline
+
+The compilation pipeline is:
+
+```
+Leo source (.leo) → Aleo Instructions (.aleo) → AVM bytecode (.avm)
+```
+
+When a program is built, each function produces:
+- A **prover** file (`.prover`) used to generate zero-knowledge proofs.
+- A **verifier** file (`.verifier`) used to verify proofs.
+- A single **bytecode** file (`main.avm`) for the entire program.
+
+## Next Steps
+
+- [Reference](/build/aleo-instructions/reference) — full language specification and opcode reference.
+- [Leo Language](/build/leo/language/overview) — the recommended high-level language for writing Aleo programs.
+- [ABNF Grammar](https://github.com/ProvableHQ/grammars) — the formal grammar specification for Aleo Instructions.

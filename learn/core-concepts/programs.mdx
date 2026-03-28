@@ -1,0 +1,90 @@
+---
+title: Programs
+sidebar_label: Programs
+sidebar_position: 3
+description: An overview of programs on the Aleo network.
+---
+
+# Programs
+
+Programs are the fundamental unit of application logic on Aleo. They define data structures, state transitions, and onchain storage — similar to smart contracts on other blockchains, but with built-in support for private execution.
+
+## Program ID
+
+Every program has a unique identifier in the format `name.aleo` (e.g., `token.aleo`, `credits.aleo`). The program ID is set at deployment and cannot be changed. Shorter names (under 10 characters) incur a higher deployment fee to discourage namespace squatting.
+
+Under the hood, every program ID is hashed to derive a **program address** — an `aleo1...` address just like a user account. This means programs live in the same address space as users, and can hold public state in mappings.
+
+:::warning
+Never send records to a **program address** (derived from a program ID hash). Program addresses have no private key, so any records sent to them are permanently inaccessible. Only send records to addresses controlled by a private key.
+:::
+
+## Structure
+
+An Aleo program can contain:
+
+- **Structs** — Named collections of typed fields, used for organizing data
+- **Records** — Composite types with an `owner` field that enable private state 
+- **Mappings** — Onchain key-value stores for public state
+- **Transitions** — Functions that execute offchain and produce zero-knowledge proofs
+- **Async functions** — Logic that runs onchain after a transition's proof is verified
+
+## Transitions and Async Functions
+
+A program's logic is split between two execution contexts:
+
+### Transitions (Offchain)
+
+Transitions run on the user's device and produce a ZK proof. They can:
+
+- Accept private and public inputs
+- Consume and create records
+- Perform arbitrary computation
+- Return outputs (private by default)
+
+Because transitions execute offchain, their inputs and computation are never revealed to the network.
+
+### Async Functions (Onchain)
+
+A transition can optionally call an `async function` — logic that runs onchain after the transition's proof is verified. Async functions can:
+
+- Read and write to mappings (public state)
+- Access block height and other onchain context
+- Enforce public constraints (e.g., checking a public balance)
+
+Async function logic is executed by validators and is fully public.
+
+### Example
+
+```leo
+program counter.aleo {
+    // Public state: a counter stored onchain
+    mapping counts: address => u64;
+
+    // Offchain transition + onchain async function
+    async transition increment() -> Future {
+        return update_count(self.caller);
+    }
+
+    async function update_count(caller: address) {
+        let current: u64 = Mapping::get_or_use(counts, caller, 0u64);
+        Mapping::set(counts, caller, current + 1u64);
+    }
+}
+```
+
+In this example, the `async transition` runs offchain (proving the caller's identity), then the `async function` executes onchain to update the public counter.
+
+## Imports and Composability
+
+Programs can import and call other deployed programs. When program A calls program B, the call produces a separate **transition** within the same transaction. A single transaction can contain up to 32 transitions (one reserved for the fee).
+
+This composability allows programs to build on each other — for example, a DEX program can call `credits.aleo` to handle token transfers.
+
+## Deployment
+
+Programs are deployed onchain through a **deploy transaction**. Once deployed, a program's code is immutable — it cannot be updated or deleted. Deployment costs are based on:
+
+- **Storage size** — The byte size of the program
+- **Program name length** — Shorter names cost more
+- **Circuit complexity** — The number of constraints and variables in the program's functions

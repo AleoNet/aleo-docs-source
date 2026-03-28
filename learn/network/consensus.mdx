@@ -1,0 +1,54 @@
+---
+title: "Consensus"
+sidebar_label: "Consensus"
+sidebar_position: 2
+description: How AleoBFT consensus works on the Aleo network.
+---
+
+# Consensus
+
+Aleo's consensus protocol is called **AleoBFT** — a DAG-based Byzantine Fault Tolerant (BFT) system inspired by the Narwhal mempool and Bullshark ordering protocols. It provides **instant finality**: once a block is committed, it is final and cannot be reverted.
+
+## How It Works
+
+### DAG Structure
+
+AleoBFT organizes validator communication into a **directed acyclic graph (DAG)** built over a series of rounds:
+
+1. Each validator broadcasts exactly **one message per round**, referencing at least `n - f` messages from the previous round (where `n` is the total number of validators and `f` is the maximum number of Byzantine nodes).
+2. Validators collect signatures from peers to form **batch certificates** — cryptographic proof that a supermajority acknowledged the message.
+3. These certificates form the vertices of the DAG, with edges pointing to referenced certificates from prior rounds.
+
+### Leader Selection and Commit
+
+- A **leader** is elected every even-numbered round. The leader's vertex is called the **anchor**.
+- An anchor commits when it receives at least `f + 1` votes from the next round.
+- Once an anchor commits, all transactions it references (and all prior uncommitted anchors reachable in the DAG) are ordered and included in a block.
+
+### Finality
+
+AleoBFT achieves instant finality because the DAG structure guarantees that if any honest validator commits an anchor, all future anchors will have a path to at least one vertex that voted for it. There is no possibility of forks or chain reorganizations.
+
+## Block Production
+
+When the DAG commits, validators produce a block containing:
+
+- **Transactions** — Execute and deploy transactions with their ZK proofs
+- **Ratifications** — Coinbase reward distributions
+- **Solutions** — Accumulated prover puzzle solutions
+- **Header** — Previous state root, transaction roots, metadata (height, round, timestamp, supply, proof targets)
+
+Blocks require approval from **more than 2/3 of the committee's voting power** (weighted by stake).
+
+## Fault Tolerance
+
+AleoBFT tolerates up to `f` Byzantine validators where `f < n/3`. As long as more than 2/3 of the committee (by stake weight) is honest, the network continues producing blocks and maintaining consensus.
+
+## Epochs
+
+The network is divided into **epochs** of 360 blocks. At the start of each epoch, an `epoch_hash` is deterministically generated from the previous block hash. This hash seeds:
+
+- The **EpochProgram** — a randomly sampled program that provers must solve during the epoch
+- Input randomization for puzzle attempts, preventing precomputation
+
+All puzzle solutions within an epoch must reference the current `epoch_hash`.

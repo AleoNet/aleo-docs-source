@@ -1,0 +1,72 @@
+---
+title: Background
+sidebar_label: Background
+sidebar_position: 1
+description: An introduction to blockchain technology, zero-knowledge proofs, and why privacy matters.
+---
+
+# Background
+
+Before diving into Aleo, it helps to understand the building blocks it's built on: blockchains, zero-knowledge proofs, and the case for privacy.
+
+## Blockchains 101
+
+A blockchain is a shared ledger maintained by a network of computers (called **nodes**) that no single party controls. Instead of trusting a bank or a company to keep records honest, blockchains use cryptography and consensus algorithms to let the network agree on what happened — without needing to trust anyone individually.
+
+Here's how it works at a high level:
+
+1. A user submits a **transaction** — a signed request to transfer funds, update data, or run a program.
+2. Nodes validate the transaction against the current state of the ledger.
+3. Valid transactions are grouped into a **block** and appended to the chain through a consensus process.
+4. Every node stores a copy of the ledger, making it extremely difficult to alter past records.
+
+**Smart contracts** (or on-chain programs) extend this idea beyond simple transfers. They let developers write arbitrary logic — token swaps, lending protocols, voting systems — that runs on the blockchain and is enforced by the network.
+
+The result is a system where anyone can verify what happened, anyone can participate, and no single entity can censor or manipulate the outcome.
+
+### The Transparency Tradeoff
+
+Most blockchains achieve trust through **total transparency**. Every transaction, every balance, every contract interaction is visible to everyone. This is a powerful property for auditability — but it comes with significant costs, which we'll explore below.
+
+## Zero-Knowledge Proofs 101
+
+A **zero-knowledge proof** (ZKP) is a cryptographic method that lets one party (the **prover**) convince another party (the **verifier**) that a statement is true — without revealing any information beyond the fact that it's true.
+
+### An Intuitive Example
+
+Imagine you want to prove to a bouncer that you're over 21, but you don't want to show your ID (which also reveals your name, address, and exact birthday). A zero-knowledge proof is like handing the bouncer a sealed, tamper-proof certificate that says "this person is over 21" — and the bouncer can verify it's legitimate without learning anything else about you.
+
+### Why This Matters for Blockchains
+
+In a traditional blockchain, verification requires seeing the data. To confirm a transaction is valid, every node needs to see the sender, the recipient, the amount, and the contract logic.
+
+Zero-knowledge proofs break this coupling. A prover can execute a computation offchain and produce a compact proof that the computation was done correctly. Verifiers check the proof — not the computation itself. This has two major implications:
+
+- **Privacy**: The underlying data (inputs, outputs, balances) can remain hidden while correctness is still guaranteed.
+- **Scalability**: Verifying a proof is faster and cheaper than re-executing the entire computation, regardless of how complex the original work was.
+
+### ZK-SNARKs
+
+Aleo uses a specific type of zero-knowledge proof called a **ZK-SNARK** (Zero-Knowledge Succinct Non-Interactive Argument of Knowledge):
+
+- **Succinct** — Proofs are small and fast to verify, even for large computations.
+- **Non-Interactive** — The prover generates the proof once; no back-and-forth with the verifier is needed.
+
+These properties make ZK-SNARKs practical for blockchain use, where proofs need to be verified quickly by many nodes.
+
+## Why Privacy Matters
+
+On most blockchains today, every transaction is permanently visible to anyone. While addresses are pseudonymous, it's often straightforward to link them to real-world identities through exchange records, on-chain patterns, or data leaks.
+
+This creates real problems:
+
+- **For individuals**: Your entire financial history — salary payments, medical expenses, donations — is publicly visible once your address is linked to your identity.
+- **For businesses**: Competitors can see your supplier payments, customer volumes, payroll, and treasury movements in real time. Businesses cannot operate with this level of exposure.
+- **For DeFi users**: Visible pending transactions enable **front-running** — where bots detect your trade and execute ahead of you to profit at your expense.
+- **For security**: Public balances and transaction patterns make high-value wallets targets for social engineering and physical threats.
+
+Privacy isn't about hiding wrongdoing. It's the same reason you don't publish your bank statements publicly — even when you have nothing to hide. Financial privacy is a baseline requirement for both individuals and institutions to participate in an economy.
+
+### Privacy Enables Adoption
+
+For blockchain technology to move beyond speculation and serve real-world use cases — payroll, healthcare records, supply chain management, compliant financial systems — it needs the same privacy guarantees that traditional systems provide. Zero-knowledge proofs make this possible without sacrificing the transparency and verifiability that make blockchains valuable in the first place.

@@ -1,0 +1,85 @@
+---
+title: Record Scanning
+sidebar_label: Record Scanning
+sidebar_position: 4
+description: How wallets discover and decrypt private records on the Aleo network.
+---
+
+# Record Scanning
+
+Because records are stored onchain in encrypted form, wallets need a way to discover which records belong to a given account and determine which have been spent. This process is called **record scanning**.
+
+## The Problem
+
+On a transparent blockchain, finding your balance is trivial — look up your address in the state. On Aleo, private records are encrypted and there's no public index linking records to owners. A wallet must scan the chain and identify its own records from the stream of encrypted data.
+
+## Record Discovery
+
+The only way to discover new records is **trial decryption** using the account's view key. There is no shortcut — every output record on the chain must be checked.
+
+For each output record ciphertext onchain, the wallet:
+
+1. Reconstructs the record view key:
+   ```
+   record_view_key = (record.nonce × view_key).to_x_coordinate()
+   ```
+2. Derives a decryption randomizer from the record view key
+3. Decrypts the owner field and checks if it matches the account's address
+4. If it matches, the record belongs to the account — decrypt the remaining fields
+
+This requires the account's **view key** and must process every output record on the chain.
+
+### Delegated Scanning
+
+Because full-chain trial decryption is computationally expensive, wallets can delegate this work to a **confidential scanning service**. The wallet registers its view key with the service (optionally encrypted), and the service performs trial decryption server-side, maintaining an index of owned records per registered view key. The wallet then queries the service for its records rather than scanning the chain directly.
+
+This is how wallets like [Shield](/participate/wallets) handle record scanning in practice.
+
+## Spent Detection
+
+Once a wallet has discovered its records, it needs to determine which are still spendable. When a record is consumed in a transition, both a **serial number** and a **tag** are published onchain.
+
+### Serial Number Method (Requires Private Key)
+
+The wallet computes the serial number for each known record using the account's private key (involving scalar multiplication on the Edwards BLS12 curve) and checks if it exists onchain. This is the definitive method but computationally expensive per record.
+
+### Tag Method (Requires View Key)
+
+A faster alternative using the account's **graph key**. The graph key contains a single value, `sk_tag`, derived from the view key:
+
+```
+sk_tag = Hash("AleoGraphKey" || view_key || 0)
+```
+
+For each known record commitment, the wallet computes:
+
+```
+tag = Hash(sk_tag, record_commitment)
+```
+
+If this tag exists onchain (published when the record was consumed), the record has been spent. This is an O(1) lookup per record and avoids the expensive scalar multiplication needed for serial number computation.
+
+### What's Published Onchain
+
+When a record is consumed as a transition input, two values are stored:
+
+| Field | Purpose |
+|---|---|
+| **Serial number** | Unique nullifier proving the record is consumed; prevents double-spending |
+| **Tag** | `Hash(sk_tag, commitment)`; enables fast view-key-level spent detection |
+
+Both are public data in the transition and are verified as part of the ZK proof.
+
+## Scanning Strategies
+
+### Full Scan
+
+Process every block from genesis, trial-decrypting all output records. This is the most thorough approach but also the slowest — it must touch every record ever created on the network.
+
+### Incremental Sync
+
+After an initial full scan, the wallet only processes new blocks as they're produced. This is fast but requires maintaining a local state of known records.
+
+### Service-Backed Sync
+
+Delegate discovery to a scanning service (as described above), then use the tag method locally for ongoing spent detection. This is the most practical approach for mobile and web wallets.

@@ -1,0 +1,169 @@
+---
+title: The Aleo Curves
+sidebar_label: The Aleo Curves
+sidebar_position: 2
+description: The elliptic curves used in Aleo's cryptographic primitives.
+---
+
+# The Aleo Curves
+
+Aleo's cryptography is built on two elliptic curves that work together: **BLS12-377** for SNARK operations (outer layer) and **Edwards BLS12** for in-circuit cryptography (inner layer).
+
+## Overview
+
+The critical relationship between these curves:
+
+```
+BLS12-377 scalar field (Fr) = Edwards BLS12 base field (Fq)
+8444461749428370424248824938781546531375899335154063827935233455917409239041
+```
+
+This means arithmetic inside a BLS12-377 proof (natively in Fr) can be expressed as native field operations on Edwards BLS12 — no expensive field emulation is needed. This enables efficient in-circuit cryptographic operations and proof composition.
+
+| | Edwards BLS12 | BLS12-377 |
+|---|---|---|
+| **Curve Model** | Twisted Edwards | Short Weierstrass |
+| **Pairing-Friendly** | No | Yes (embedding degree 12) |
+| **Scalar Field** | 251 bits | 253 bits |
+| **Base Field** | 253 bits | 377 bits |
+| **G1 Compressed Size** | 32 bytes | 48 bytes |
+| **G2 Compressed Size** | N/A | 96 bytes |
+| **Primary Use** | Addresses, signatures, key derivation | SNARK proofs, polynomial commitments |
+
+### Inner and Outer Layers
+
+- **Outer layer (BLS12-377)**: The SNARK prover generates proofs over BLS12-377. Verification uses pairings on this curve. The Structured Reference String (SRS), KZG polynomial commitments, and proof aggregation all operate in BLS12-377.
+- **Inner layer (Edwards BLS12)**: Key generation, signing, address derivation, and record encryption happen on Edwards BLS12. When these operations are proven inside a SNARK, the arithmetic is expressed as constraint equations over BLS12-377's Fr — which equals Edwards BLS12's Fq. No field mismatch, cheap constraints.
+
+This is analogous to Zcash's Jubjub + BLS12-381 pairing, but Aleo's curve choices maximize FFT efficiency.
+
+## Edwards BLS12
+
+A Twisted Edwards curve **embedded inside BLS12-377**, with complete, exception-free addition laws.
+
+### Curve Equation
+
+```
+-x² + y² = 1 + d·x²·y²
+```
+
+### Parameters
+
+| Parameter | Value |
+|---|---|
+| `a` | -1 |
+| `d` | 3021 |
+| Base field (Fq) | BLS12-377's scalar field Fr (253 bits) |
+| Cofactor | 4 |
+| Compressed point size | 32 bytes (x-coordinate + sign bit for y) |
+
+Because `a = -1`, multiplication by `a` is just negation — very cheap in circuit constraints. The curve is birationally equivalent to a Montgomery curve.
+
+### Usage
+
+- **Account addresses** — Aleo `aleo1...` addresses are points on this curve
+- **Key derivation** — Private key → view key → address
+- **Transaction signatures** — Authorization signing
+- **Pedersen commitments** — Record commitments and serial number generation
+- **Encryption** — Record and ciphertext encryption
+
+### Scalar Field Parameters
+
+| Representation | Value |
+|---|---|
+| Modulus (integer) | `2111115437357092606062206234695386632838870926408408195193685246394721360383` |
+| Modulus (hex) | `04aad957a68b2955982d1347970dec005293a3afc43c8afeb95aee9ac33fd9ff` |
+| Modulus (u64 LE) | `[13356249993388743167, 5950279507993463550, 10965441865914903552, 336320092672043349]` |
+| Root of Unity (integer) | `319259817323897909850357899558356952867916286821886696195104543796545181129` |
+| Root of Unity (u64 LE) | `[15170730761708361161, 13670723686578117817, 12803492266614043665, 50861023252832611]` |
+
+### Base Field Parameters
+
+| Representation | Value |
+|---|---|
+| Modulus (integer) | `8444461749428370424248824938781546531375899335154063827935233455917409239041` |
+| Modulus (hex) | `12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001` |
+| Modulus (u64 LE) | `[725501752471715841, 6461107452199829505, 6968279316240510977, 1345280370688173398]` |
+| Root of Unity (integer) | `5928890464389279575069867463136436689218492512582288454256978381122364252082` |
+| Root of Unity (u64 LE) | `[4340692304772210610, 11102725085307959083, 15540458298643990566, 944526744080888988]` |
+
+## BLS12-377
+
+A pairing-friendly curve in the Barreto-Lynn-Scott family with embedding degree 12. Its scalar field Fr has **2-adicity 47** (2^47 divides Fr - 1), required for efficient FFTs during proof generation.
+
+### Curve Equation
+
+**G1**: `y² = x³ + 1` over Fq (377-bit prime field)
+
+### Fields
+
+| Field | Size | Modulus |
+|---|---|---|
+| Fq (base field) | 377 bits | `258664426012969094010652733694893533536393512754914660539884262666720468348340822774968888139573360124440321458177` |
+| Fr (scalar field) | 253 bits | `8444461749428370424248824938781546531375899335154063827935233455917409239041` |
+
+### Subgroups
+
+- **G1** — Points on `y² = x³ + 1` over Fq, cofactor approximately 2^94
+- **G2** — Points on the D-type quadratic twist over Fq² (degree-2 extension)
+- **GT** — Target group in Fq^12 (degree-12 extension)
+
+### Pairing
+
+BLS12-377 supports an **Optimal Ate pairing** via Miller loop + final exponentiation:
+
+```
+e(aP, Q) = e(P, aQ) = e(P, Q)^a
+```
+
+This bilinearity property is the mathematical foundation of the Varuna SNARK and the **SonicKZG10** polynomial commitment scheme.
+
+### Usage
+
+- **SNARK proof generation and verification** — Varuna operates over BLS12-377
+- **Structured Reference String (SRS)** — Universal setup parameters
+- **KZG polynomial commitments** — SonicKZG10 commitment scheme
+- **Proof aggregation** — Batching multiple transition proofs
+
+BLS12-377 was designed (in the [ZEXE paper](https://eprint.iacr.org/2018/962)) specifically for efficient proof composition alongside the BW6-761 curve.
+
+### Scalar Field Parameters
+
+| Representation | Value |
+|---|---|
+| Modulus (integer) | `8444461749428370424248824938781546531375899335154063827935233455917409239041` |
+| Modulus (hex) | `12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001` |
+| Modulus (u64 LE) | `[725501752471715841, 6461107452199829505, 6968279316240510977, 1345280370688173398]` |
+| Root of Unity (integer) | `5928890464389279575069867463136436689218492512582288454256978381122364252082` |
+| Root of Unity (u64 LE) | `[4340692304772210610, 11102725085307959083, 15540458298643990566, 944526744080888988]` |
+
+### Base Field Parameters
+
+| Representation | Value |
+|---|---|
+| Modulus (integer) | `258664426012969094010652733694893533536393512754914660539884262666720468348340822774968888139573360124440321458177` |
+| Modulus (hex) | `01ae3a4617c510eac63b05c06ca1493b1a22d9f300f5138f1ef3622fba094800170b5d44300000008508c00000000001` |
+| Modulus (u64 LE) | `[9586122913090633729, 1660523435060625408, 2230234197602682880, 1883307231910630287, 14284016967150029115, 121098312706494698]` |
+| Root of Unity (integer) | `146552004846884389553264564610149105174701957497228680529098805315416492923550540437026734404078567406251254115855` |
+| Root of Unity (u64 LE) | `[2022196864061697551, 17419102863309525423, 8564289679875062096, 17152078065055548215, 17966377291017729567, 68610905582439508]` |
+
+## Keccak in snarkVM
+
+snarkVM implements Keccak as a sponge construction `Sponge[f, pad, r]`, where the permutation `f = Keccak-f[1600]` operates on a 5×5 grid of 64-bit lanes (1600-bit state).
+
+### Padding Variants
+
+| Variant | Padding Suffix | `pad(M)` |
+|---|---|---|
+| Keccak | `0x01` | `M \|\| 0x01 \|\| 0x00...0x00 \|\| 0x80` |
+| SHA-3 | `0x06` | `M \|\| 0x06 \|\| 0x00...0x00 \|\| 0x80` |
+| SHAKE | `0x1F` | `M \|\| 0x1F \|\| 0x00...0x00 \|\| 0x80` |
+
+### snarkVM Parameters
+
+| Variant | Bitrate (r) | Capacity (c) |
+|---|---|---|
+| Keccak-256 / SHA3-256 | 1088 bits | 512 bits |
+| SHA3-512 | 576 bits | 1024 bits |
+
+The bitrate `r` determines how many bits are XORed per absorb step; the capacity `c = 1600 - r` provides the security margin.

@@ -1,0 +1,42 @@
+---
+title: Decrypt Records
+sidebar_label: Decrypt
+sidebar_position: 5
+---
+
+import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
+
+# Decrypt Records
+
+<DemoForm
+  action="Decrypt"
+  fields={[
+    { type: 'textarea', name: 'ciphertext', label: 'Ciphertext', placeholder: 'Record / Cipher text to Decrypt' },
+  ]}
+  onSubmit={async (values, wallet) => {
+    const decrypted = await wallet.decrypt(String(values.ciphertext));
+    return decrypted;
+  }}
+/>
+
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import React, { useCallback } from 'react';
+
+export const DecryptMessage = () => {
+  const { address, decrypt, connected } = useWallet();
+
+  const onClick = useCallback(async () => {
+    if (!connected || !address) throw new WalletNotConnectedError();
+
+    const cipherText = 'record1qyqsyqcyq5rqwzqfpgqshzv...';
+    const decrypted = await decrypt(cipherText);
+    console.log('Decrypted:', decrypted);
+  }, [address, decrypt, connected]);
+
+  return (
+    <button onClick={onClick} disabled={!connected}>
+      Decrypt Record
+    </button>
+  );
+};`}</CopyCodeBlock>
