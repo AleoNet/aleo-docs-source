@@ -1,3 +1,4 @@
 [submodule "leo-docs-source"]
 	path = leo-docs-source
 	url = https://github.com/ProvableHQ/leo-docs-source.git
+	branch = aleo-docs
