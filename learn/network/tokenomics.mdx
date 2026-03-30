@@ -20,31 +20,6 @@ New credits enter circulation through two mechanisms:
 
 Transaction fees are also collected by validators but are not new issuance — they are transfers from existing supply.
 
-## Coinbase Reward Schedule
-
-Coinbase rewards decrease over a 10-year schedule. The maximum possible coinbase reward per block (**R_anchor**) declines linearly, reaching a fixed minimum (**R_Y9**) in year 9 that remains constant thereafter.
-
-| Year | R_anchor (credits) | Avg Coinbase/Block | Theoretical Max Supply |
-|---|---|---|---|
-| 0 (genesis) | ~190 | ~20.5 | 1.5B |
-| 1 | ~171 | ~19.4 | ~1.85B |
-| 2 | ~152 | ~17.1 | ~2.13B |
-| 3 | ~133 | ~14.8 | ~2.38B |
-| 4 | ~114 | ~12.6 | ~2.61B |
-| 5 | ~95 | ~10.3 | ~2.82B |
-| 6 | ~76 | ~8.0 | ~3.00B |
-| 7 | ~57 | ~5.7 | ~3.16B |
-| 8 | ~38 | ~3.4 | ~3.30B |
-| 9+ | ~19 | ~2.3 | ~3.41B |
-
-The actual coinbase reward for a given block depends on how much proving activity occurred:
-
-```
-R_coinbase = R_anchor × min(P, C_remaining) / C
-```
-
-Where **P** is the combined proof target from all solutions, **C** is the coinbase target, and **C_remaining** is how much of the epoch's target has not yet been filled. In practice, proving activity is well below the theoretical maximum, so actual emissions are lower than the table above.
-
 ## Reward Split
 
 Each block's coinbase reward is divided:
@@ -54,7 +29,20 @@ Each block's coinbase reward is divided:
 | **Provers** | 2/3 | Distributed proportionally to each prover's proof target contribution |
 | **Validators** | 1/3 | Added to the block reward and distributed to the validator and their delegators by stake |
 
-## Supply Cap (ARC-0047)
+
+## Coinbase Reward Schedule
+
+Coinbase rewards decrease over a 10-year schedule. The maximum possible coinbase reward per block (**R_anchor**) declines linearly, reaching a fixed minimum (**R_Y9**) in year 9 that remains constant thereafter until the hard cap.
+
+The actual coinbase reward for a given block depends on how much proving activity occurred:
+
+```
+R_coinbase = R_anchor × min(P, C_remaining) / C
+```
+
+Where **P** is the combined proof target from all solutions, **C** is the coinbase target, and **C_remaining** is how much of the epoch's target has not yet been filled. In practice, proving activity is well below the theoretical maximum, so actual emissions are lower than the table above.
+
+### Supply Cap (ARC-0047)
 
 Per [ARC-0047](https://github.com/ProvableHQ/ARCs/discussions/101), the total supply of Aleo credits is hard-capped at **5 billion**. At block height **263,527,685** (estimated ~Q4 2049), both block rewards and coinbase rewards drop to zero. No new credits are minted after this point.
 
