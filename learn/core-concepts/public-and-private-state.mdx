@@ -11,28 +11,28 @@ Aleo gives developers two ways to store data, and they can use both within the s
 
 ## Private State
 
-Records are **encrypted data** owned by a specific user. They work similarly to Bitcoin's UTXO model — when you "spend" a record, it's consumed and a new one is created.
+**Records** are Aleo's approach to private state.  They are units of **encrypted data** owned by a specific user. Records work similarly to Bitcoin's UTXO model; when you "spend" a record, it's consumed and a new one is created.
 
 - Only the owner (and anyone with their view key) can decrypt a record's contents
 - Records are stored onchain in encrypted form
-- Executed **offchain** as part of a transition, with a ZK proof submitted for verification
+- Executed and procuded **offchain** as part of a transition, with a ZK proof submitted for verification
 
 Each record has its own **record view key**, derived when the record is created. The record view key allows decryption of that specific record without needing the account-level [view key](/learn/core-concepts/accounts-and-keys#view-key). This means a user can share a record view key with an auditor or counterparty to reveal the contents of a single record — without exposing any other records or transaction history on the account.
 
-As of Consensus V8, records also include an encrypted **`sender_ciphertext`** field, which stores the address of the transaction signer who created the record. This is encrypted alongside the record data, so only the record owner can see who sent it. This allows recipients to identify the sender of a private transfer without that information being publicly visible onchain.
+Records also include an encrypted **`sender_ciphertext`** field [^1], which stores the address of the transaction signer who created the record. This is encrypted alongside the record data, so only the record owner can see who sent it. This allows recipients to identify the sender of a private transfer without that information being publicly visible onchain.
 
 ## Public State
 
-Public state follows an **account-based model**, similar to Ethereum. Data is stored onchain in **mappings** — key-value stores that are publicly readable and directly updated by validators.
+Public state follows an account-based model, similar to Ethereum. Data is stored onchain in **mappings** — key-value stores that are publicly readable and directly updated by validators.
 
 - Anyone can read a mapping's contents
 - Updates are executed **onchain** in the async function phase of a transaction
 
-For example, `credits.aleo` stores public balances in a mapping where the key is an address and the value is a microcredit balance — just like how Ethereum tracks account balances.
+For example, `credits.aleo` stores public balances in a mapping where the key is an address and the value is a microcredit balance.  This is exactly how Ethereum tracks account balances.
 
 ## Choosing Between Public and Private State
 
-This hybrid model means developers choose the right privacy level for each piece of data — and can use both in the same program. For example, a token program might store individual balances privately in records while maintaining a public total supply in an onchain mapping.
+This hybrid model means developers choose the right privacy level for each piece of data. For example, a token program might store individual balances privately in records while maintaining a public total supply in an onchain mapping.
 
 The distinction also maps to where code runs:
 
@@ -43,4 +43,6 @@ The distinction also maps to where code runs:
 | **Proof** | ZK proof submitted onchain | Executed directly by validators |
 | **Model** | UTXO-like (consumed and created) | Account-like (key-value mappings) |
 
-This public/private split is what makes Aleo fundamentally different from other blockchains. It's not privacy bolted on as an afterthought — it's the core of how programs are structured and executed.
+This public/private split is what makes Aleo fundamentally different from other blockchains. It's not privacy bolted on as an afterthought; it's the core of how programs are structured and executed.
+
+[^1]: `sender_ciphertext` was included as of [Consensus V8](https://provable.com/blog/updates-to-aleo-records-and-varuna).  Records produced before this must be upgraded before being spent

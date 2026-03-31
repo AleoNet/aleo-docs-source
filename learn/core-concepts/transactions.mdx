@@ -13,12 +13,12 @@ Transactions are the top-level unit of interaction with the Aleo network. Every 
 
 ### Execute
 
-The most common type. An execute transaction calls one or more program functions, producing zero-knowledge proofs of correct execution.
+The most common type. An execute transaction calls one or more program functions, producing a zero-knowledge proof of correct execution.
 
 An execute transaction contains:
 - One or more **transitions** (individual function calls, up to 32 per transaction)
 - A **fee transition** (one of the 32 slots is reserved for the fee)
-- A ZK proof for each transition
+- A ZK proof for the transaction
 
 ### Deploy
 
@@ -34,10 +34,9 @@ A **transition** is a single function call within a transaction. Each transition
 
 - Belongs to a specific program and function
 - Has its own inputs and outputs
-- Produces its own ZK proof
 - Can consume and create records independently
 
-When a program calls another program, each call produces a separate transition. This means a single transaction can span multiple programs while maintaining independent proofs for each step.
+When a program calls another program, each call produces a separate transition. This means a single transaction can span multiple programs.
 
 ### Transition View Key
 
@@ -65,7 +64,7 @@ Rejected transactions still incur fees. This prevents attackers from spamming th
 
 ## Fees
 
-Transaction fees are paid in **Aleo credits** (microcredits). Fees have two components:
+Transaction fees are paid in **Aleo Credits** (microcredits). Fees have two components:
 
 ### Base Fee
 

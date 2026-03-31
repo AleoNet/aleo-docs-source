@@ -29,7 +29,7 @@ Private credits are stored as encrypted **records**.  Each record contains an `o
 
 - Your total private balance is the sum of all unspent credit records you own
 - Spending a record consumes it and produces new records (payment + change)
-- Your wallet must scan the chain to identify which records belong to you and which have been spent
+- Your wallet must [scan the chain](../advanced/record-scanning.mdx) to identify which records belong to you and which have been spent
 
 ### Public
 
@@ -71,9 +71,16 @@ You can hold credits in both forms at the same time and convert between them usi
 
 `transfer_public_as_signer` differs from `transfer_public` in one important way: it uses the **original transaction signer** as the "from" address, not the immediate function caller. This matters when a program calls `credits.aleo` on behalf of a user — `transfer_public` would use the intermediate program as the sender, while `transfer_public_as_signer` uses the actual user.
 
+:::note
+There is no `transfer_private_as_signer` function, as only the `owner` of a record is allowed to spend it.
+:::
+
 ## Fee-Free Operations
 
 Two special functions are exempt from base fees:
 
-- **`split`** — Splits a private credit record into two records. Used for managing record sizes without incurring fees. Note: while `split` is exempt from base fees, a hardcoded 10,000 microcredit deduction is taken from one of the output records to prevent DoS attacks.
-- **`upgrade`** — Upgrades a Version 0 record to Version 1 format (required to spend any records produced prior to Consensus V8).
+- **`split`** — Splits a private credit record into two records. Used for managing record sizes without incurring fees. 
+    - **Note**: while `split` is exempt from base fees, a hardcoded 10,000 microcredit deduction is taken from one of the output records to prevent DoS attacks.
+- **`upgrade`** — Upgrades a Version 0 record to Version 1 format (required to spend any records produced prior to Consensus V8 [^1]).
+
+[^1]: This upgrade added the `sender_ciphertext` field to records.
