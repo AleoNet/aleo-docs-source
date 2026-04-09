@@ -20,7 +20,7 @@ Seed → Private Key → Compute Key → View Key → Address
 
 ### 1. Seed
 
-A random 32-byte value, sampled offline. This is the root secret from which everything else is derived.
+A random base field element, sampled offline. This is the root secret from which everything else is derived. The field element has ~253 bits of entropy and serializes to 32 bytes.
 
 ### 2. Private Key
 
@@ -42,18 +42,22 @@ Derived from the private key via scalar multiplication on the [Edwards BLS12](/l
 ```
 pk_sig = sk_sig × G
 pr_sig = r_sig × G
-sk_prf = HashToScalar(pk_sig.x || pr_sig.x)
+sk_prf = HashToScalar_PSD4(pk_sig.x || pr_sig.x)
 ```
+
+Note that `sk_prf` uses the **x-coordinates** of the group elements, not the full points, and is hashed with **PSD4** (Poseidon with input rate 4).
 
 The compute key is the tuple `(pk_sig, pr_sig, sk_prf)`. It can be shared with third-party provers for [delegated proving](/learn/advanced/delegated-proving) — it allows proof generation but cannot sign transactions or decrypt records.
 
 ### 4. View Key
 
-A single scalar derived from the private key components:
+A single scalar derived from the private key and compute key:
 
 ```
-view_key = sk_sig + r_sig + HashToScalar(pk_sig || pr_sig)
+view_key = sk_sig + r_sig + sk_prf
 ```
+
+where `sk_prf` is the value from the compute key (`HashToScalar_PSD4(pk_sig.x || pr_sig.x)`).
 
 The view key allows decryption of all records and transaction data belonging to the account. Encoded as Base58 with prefix `AViewKey1`.
 
@@ -65,24 +69,26 @@ The address is derived from the view key via scalar multiplication:
 address = view_key × G
 ```
 
-The result is a point on the Edwards BLS12 curve, encoded in Bech32 format with prefix `aleo1`.
+The result is a point on the Edwards BLS12 curve, encoded in Bech32m format with prefix `aleo1`.
 
 ### 5.1. Graph Key
 
 Derived from the view key for [record scanning](/learn/advanced/record-scanning):
 
 ```
-sk_tag = HashToScalar("AleoGraphKey" || view_key || 0)
+sk_tag = Hash_PSD4("AleoGraphKey0" || view_key || 0field)
 ```
+
+Note that `sk_tag` is a **field element** (not a scalar), computed using `hash_psd4` (Poseidon with input rate 4). The domain separator is `"AleoGraphKey0"` and the third input is `Field::zero()`.
 
 The graph key's `sk_tag` is used to compute deterministic tags on record commitments, enabling efficient [spent detection](/learn/advanced/record-scanning#tag-method-requires-view-key) without needing the private key.
 
 ## Poseidon Hash
 
-All `HashToScalar` operations use the **Poseidon** hash function — an algebraic hash that operates directly over field elements. Variants used:
+Key derivation uses the **Poseidon** hash function — an algebraic hash that operates directly over field elements. Two variants are used:
 
-- **PSD2** — Poseidon sponge with domain separation, input rate 2 (used for key derivation)
-- **PSD4** — Poseidon sponge with domain separation, input rate 4 (used for graph key, sk_prf)
+- **PSD2** — Poseidon sponge with domain separation, input rate 2. Used for deriving `sk_sig` and `r_sig` from the seed.
+- **PSD4** — Poseidon sponge with domain separation, input rate 4. Used for deriving `sk_prf` (via `HashToScalar_PSD4`, output is a scalar) and `sk_tag` (via `Hash_PSD4`, output is a field element).
 
 Poseidon is chosen because it's efficient inside SNARKs — since it operates over the same finite field as the circuit, it requires far fewer constraints than non-algebraic hashes like SHA-256.
 

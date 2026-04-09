@@ -15,7 +15,7 @@ Each transition contains:
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | Field | Merkle tree digest of input and output IDs |
+| `id` | Field | `Hash_BHP512(merkle_root \|\| tcm)` where `merkle_root` is the Merkle tree root of input and output IDs |
 | `program_id` | String | The program this transition belongs to |
 | `function_name` | String | The function that was called |
 | `inputs` | Array | Constant, public, private, or record inputs |
@@ -48,7 +48,7 @@ The TVK encrypts and decrypts private inputs and outputs for this specific trans
 ### Transition Commitment (TCM)
 
 ```
-tcm = Hash(tvk)
+tcm = Hash_PSD2(tvk)
 ```
 
 Commits to the TVK without revealing it. Published onchain.
@@ -56,7 +56,7 @@ Commits to the TVK without revealing it. Published onchain.
 ### Signer Commitment (SCM)
 
 ```
-scm = Hash(signer.to_x_coordinate() || root_tvk)
+scm = Hash_PSD2(signer.to_x_coordinate() || root_tvk)
 ```
 
 Binds the signer's identity to the root transition view key (the TVK of the top-level transition in the transaction). This ensures all transitions in a transaction are attributable to the same signer without revealing the signer's address.
@@ -65,16 +65,41 @@ Binds the signer's identity to the root transition view key (the TVK of the top-
 
 When a transition consumes a record, the following steps produce a **serial number** (preventing double-spending) and a **tag** (enabling [record scanning](/learn/advanced/record-scanning)):
 
-1. **Record View Key**: `(record.nonce × view_key).to_x_coordinate()`
-2. **Record Commitment**: Hash of all record fields (program ID, record name, field values, nonce)
-3. **Generator H**: `HashToGroup(serial_number_domain || commitment)` — a unique generator per record
-4. **Gamma**: `gamma = sk_sig × H`
-5. **Serial Number**:
+### 1. Record View Key
    ```
-   sn_nonce = Hash(serial_number_domain || (cofactor × gamma).to_x_coordinate())
-   serial_number = Commit(commitment_bits, sn_nonce)
+   record_view_key = (record.nonce × view_key).to_x_coordinate()
    ```
-6. **Tag**: `Hash(sk_tag, commitment)` — computed from the [graph key](/learn/advanced/key-derivation#6-graph-key)
+### 2. Record Commitment
+```
+input_bits = program_id || record_name || record_data
+```
+- `record_data` should have `version` stripped out before
+
+#### V0 Records (non-hiding):
+```
+commitment = Hash_BHP1024(input_bits)
+```
+#### **V1 Records (hiding):**
+```
+digest = Hash_BHP1024(input_bits)
+cm_nonce = HashToScalar_PSD2("AleoCommitment0" || record_view_key)
+commitment = Commit_BHP512(digest || version, cm_nonce)
+```
+### 3. Generator & Gamma
+```
+H = HashToGroup_PSD2(serial_number_domain || commitment)
+gamma = sk_sig × H
+```
+### 4. Serial Number
+```
+sn_nonce = HashToScalar_PSD2(serial_number_domain || (cofactor × gamma).to_x_coordinate())
+serial_number = Commit_BHP512(serial_number_domain || commitment, sn_nonce)
+```
+### 5. Tag
+```
+Hash_PSD2(sk_tag || commitment)
+```
+   - Computed from the [graph key](./key-derivation.mdx#51-graph-key)
 
 The serial number is published onchain to mark the record as spent. The tag enables wallets to track which records have been consumed.
 
@@ -82,16 +107,37 @@ The serial number is published onchain to mark the record as spent. The tag enab
 
 When a transition creates a new record:
 
-1. **Record Commitment**: Hash of the new record's fields
-2. **Encryption Randomizer**: `Hash(tvk || output_index)`
-3. **Record View Key**: `(owner_address × randomizer).to_x_coordinate()`
-4. **Encryption**: For each field:
-   ```
-   randomizer[i] = Hash(encryption_domain || record_view_key)[i]
-   ciphertext[i] = plaintext[i] + randomizer[i]
-   ```
-5. **Checksum**: Hash of the full ciphertext (integrity verification)
-6. **Sender Ciphertext** (V1 records only): The signer's address encrypted with a separate randomizer derived from the record view key
+### 1. Record Commitment
+Same two-version scheme as input records (see [above](#2-record-commitment)).
+
+### 2. Encryption Randomizer
+```
+randomizer = HashToScalar_PSD2(tvk || register_locator)
+```
+- `register_locator` is the output register's locator (a `u64` cast to a `field` element)
+
+### 3. Record View Key
+```
+record_view_key = (owner_address × randomizer).to_x_coordinate()
+```
+
+### 4. Encryption
+```
+randomizers = Hash_Many_PSD8(encryption_domain || record_view_key)
+ciphertext[i] = plaintext[i] + randomizers[i]
+```
+
+### 5. Checksum
+```
+checksum = Hash_BHP1024(ciphertext_bits)
+```
+
+### 6. Sender Ciphertext
+```
+sender_randomizer = Hash_PSD4(encryption_domain || record_view_key || 1field)
+sender_ciphertext = signer.to_x_coordinate() + sender_randomizer
+```
+- Only available for V1 Records.
 
 The encrypted record is stored onchain. Only the owner (via their view key or the record-specific view key) can decrypt it.
 
@@ -100,16 +146,21 @@ The encrypted record is stored onchain. Only the owner (via their view key or th
 Private inputs and outputs that are not records (e.g., private function arguments) are encrypted using a **plaintext view key**:
 
 ```
-plaintext_view_key = Hash(function_id || tvk || index)
+plaintext_view_key = Hash_PSD4(function_id || tvk || index)
 ```
 
-The recipient decrypts by reconstructing this key:
+The recipient reconstructs this key in two steps:
 
-```
-plaintext_view_key = (tpk × view_key).to_x_coordinate()
-```
+1. **Derive the TVK** from the transition public key:
+   ```
+   tvk = (tpk × view_key).to_x_coordinate()
+   ```
+   This works because `tpk × view_key = (r × G) × view_key = r × (view_key × G) = r × address`, and the prover computed the same value as `signer_address × r`.
 
-This works because `tpk × view_key = (r × G) × view_key = r × (view_key × G) = r × address`, and the prover computed the same value as `signer_address × r`.
+2. **Derive the plaintext view key** from the TVK:
+   ```
+   plaintext_view_key = Hash_PSD4(function_id || tvk || index)
+   ```
 
 ## Inclusion Proofs
 
