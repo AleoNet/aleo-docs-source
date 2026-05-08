@@ -1,0 +1,506 @@
+---
+title: Embedded Wallets with Dynamic
+sidebar_label: Embedded Wallets
+---
+
+**[Dynamic](https://www.dynamic.xyz/)** is a comprehensive, developer-first platform providing "wallet infrastructure as a service" for Web3 apps, fintech, and crypto platforms. It offers a unified SDK for embedded (non-custodial) wallets, social logins, and over 600 external wallet connections across multiple chains. It streamlines user onboarding through email, SMS, or passkeys, simplifying crypto access. 
+
+This guide wires it into an Aleo dApp so users can sign in with email, social, or passkey (embedded) — or connect their Shield, Puzzle, or Fox wallets (external).
+
+## Why Dynamic for Aleo?
+Dynamic provides support for:
+- **Embedded Wallets** — email / social / passkey login, no extension install, MPC custody by Dynamic.
+- **External Wallets** — route signing through Shield, Puzzle, or Fox; same model as MetaMask on EVM.
+
+One integration covers both. Same provider, same `DynamicWidget`, same `useDynamicContext` / `useIsLoggedIn` hooks. Connect-time UX, session handling, and the connected `primaryWallet.address` are identical across paths.
+    {/* - Transaction and record APIs diverge — those differences are called out per subsection in [Part 3](#part-3-use-the-wallet). */}
+|                              | Embedded Wallet                                 | External Wallet Connection                 |
+|------------------------------|-------------------------------------------------|--------------------------------------------|
+| **Status**                   | Phase 1 in v4.80+ (sign-message in Phase 2)     | Available today                            |
+| **Who holds the key**        | User + Dynamic (Sodot MPC, non-custodial)       | The user, in their wallet                  |
+| **User onboarding**          | Email / social / passkey, no install            | Wallet extension required                  |
+| **Best for**                 | Mainstream users                                | Crypto-native users                        |
+| **Recovery**                 | Export key, iCloud / Google Drive backup        | User's wallet                              |
+| **Transaction confirmation** | Dynamic modal                                   | Wallet's own UI                            |
+{/* 
+
+## What You'll Build
+
+A React app that:
+
+- Provisions a Dynamic-managed embedded Aleo wallet, **or** connects an installed Aleo wallet (Shield, Puzzle, Fox).
+- Signs messages (sign-in-with-Aleo).
+- Executes Aleo programs — `credits.aleo/transfer_public` is the worked example.
+- Switches between `aleo:testnet` and `aleo:mainnet`.
+- Reads balances and tx status via the Provable REST API.
+
+## Prerequisites
+
+- React 18+ with TypeScript (Vite, Next.js 13+, CRA).
+- A Dynamic account and environment ID — sign up at the [Dynamic dashboard](https://app.dynamic.xyz). */}
+
+## Setup
+
+### Install
+
+```bash
+npm install @dynamic-labs/sdk-react-core @dynamic-labs/aleo
+```
+- `@dynamic-labs/sdk-react-core` — provider, hooks, prebuilt UI.
+- `@dynamic-labs/aleo` — Aleo wallet connectors (external + embedded).
+
+### Environment ID
+
+Create an environment at the [Dynamic dashboard](https://app.dynamic.xyz) and copy its ID.  The same environment ID handles both embedded and external wallet support
+
+### Provider Configuration
+
+Wrap the app in `DynamicContextProvider` with both Aleo connector factories:
+
+- `DynamicWaasAleoConnectors` — the embedded (WaaS) wallet path.
+- `AleoWalletConnectors` — installed Aleo extensions (Shield, Puzzle, Fox).
+
+Include both for either-or-both UX. Which paths actually surface in the login widget is gated by the toggles in your Dynamic environment.
+
+```tsx
+// main.tsx
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { DynamicContextProvider } from '@dynamic-labs/sdk-react-core'
+import { AleoWalletConnectors, DynamicWaasAleoConnectors } from '@dynamic-labs/aleo'
+import App from './App'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <DynamicContextProvider
+      settings={{
+        environmentId: 'YOUR_ENVIRONMENT_ID',
+        walletConnectors: [DynamicWaasAleoConnectors, AleoWalletConnectors],
+      }}
+    >
+      <App />
+    </DynamicContextProvider>
+  </StrictMode>,
+)
+```
+
+## Connecting Wallets
+
+### Embedded Wallets
+:::note
+See the [Dynamic.xyz docs](https://www.dynamic.xyz/docs/react/wallets/embedded-wallets/mpc/setup) for how to enable embedded wallet support in the [Dynamic dashboard](https://app.dynamic.xyz).
+:::
+Read the embedded wallet — handle the brief post-login window before provisioning completes:
+
+```tsx
+import { useDynamicContext, useIsLoggedIn } from '@dynamic-labs/sdk-react-core'
+
+function EmbeddedAleoWallet() {
+  const { primaryWallet } = useDynamicContext()
+  const isLoggedIn = useIsLoggedIn()
+
+  if (!isLoggedIn) return <p>Sign in to provision an Aleo wallet.</p>
+  if (!primaryWallet) return <p>Provisioning your wallet…</p>
+
+  return (
+    <div>
+      <p>Address: {primaryWallet.address}</p>
+      <p>Network: {String(primaryWallet.chain)}</p>
+    </div>
+  )
+}
+```
+
+How it works:
+
+- User signs in with email, social, or passkey — no extension, no seed phrase.
+- Dynamic provisions the wallet on first login (Sodot MPC keygen → `aleo1…` address). No "create wallet" call needed.
+- Signing key is split via MPC: Dynamic holds one share, the user's session holds the other. Non-custodial.
+- The view key lives inside Dynamic's iframe — never exposed to your app or the network.
+- Provisioned wallets expose the standard `primaryWallet` interface plus connector-level methods (`proveTransaction`, `listOwnedRecords`, `shieldToken`, key-management).
+
+
+Features:
+- **Advanced Recovery** — `exportPrivateKey`, `exportClientKeyshares`, `backupKeySharesToGoogleDrive`, `backupKeySharesToICloud`, plus password-based unlock.
+- **Sponsored fees** — ANF's Feemaster sponsors fees for `credits.aleo` (no user-paid fee). Other programs fall through to the user-paid path.
+
+:::warning
+- **Transaction execution** — uses `proveTransaction({ programId, functionName, inputs, inputTypes })` on the connector, not `requestTransaction(tx)`. See [Executing Programs](#executing-programs).
+- **Sign-message** — not yet supported in v4.80.
+:::
+
+### External Wallets
+
+Dynamic auto-detects installed Aleo wallet extensions implementing the [`@provablehq/aleo-wallet-standard`](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/main/packages/aleo-wallet-standard) — currently Shield, Puzzle, and Fox. Drop in `<DynamicWidget/>` for the prebuilt login button, wallet picker, and account modal.
+
+```tsx
+// App.tsx
+import { DynamicWidget } from '@dynamic-labs/sdk-react-core'
+
+export default function App() {
+  return (
+    <main>
+      <h1>My Aleo dApp</h1>
+      <DynamicWidget/>
+    </main>
+  )
+}
+```
+
+Read the connected wallet:
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function ConnectedAddress() {
+  const { primaryWallet } = useDynamicContext()
+  if (!primaryWallet) return <p>Not connected.</p>
+  return <p>Aleo address: {primaryWallet.address}</p>
+}
+```
+
+To restrict the widget to wallet-only login (hiding email/social), pass a `views` override in the provider's `settings`. See Dynamic's [DynamicContextProvider](https://www.dynamic.xyz/docs/react/reference/providers/dynamiccontextprovider) reference.
+
+
+
+
+## Using Wallets
+
+### Reading Wallet State
+
+- `primaryWallet.address` — the `aleo1…` bech32m address.
+- `primaryWallet.chain` — current chain ID (e.g., `"aleo:testnet"`); cast to string before rendering.
+- `user` — auth metadata (email, social, credentials), most useful with embedded login.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function WalletInfo() {
+  const { primaryWallet, user } = useDynamicContext()
+  if (!primaryWallet) return null
+
+  return (
+    <dl>
+      <dt>Address</dt><dd>{primaryWallet.address}</dd>
+      <dt>Chain</dt><dd>{String(primaryWallet.chain)}</dd>
+      {user?.email && (<><dt>Email</dt><dd>{user.email}</dd></>)}
+    </dl>
+  )
+}
+```
+
+### Executing Programs
+
+#### Embedded Wallets:
+Use `proveTransaction` on the WaaS connector. Sodot MPC signs inside the iframe; Provable's DPS proves and broadcasts. Fees for `credits.aleo` are sponsored by ANF's Feemaster.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
+
+function SendCreditsEmbedded() {
+  const { primaryWallet } = useDynamicContext()
+
+  async function handleSend() {
+    if (!primaryWallet) return
+    const connector = primaryWallet.connector as DynamicWaasAleoConnector
+
+    const { txId } = await connector.proveTransaction({
+      programId: 'credits.aleo',
+      functionName: 'transfer_public',
+      inputs: ['aleo1recipientaddress…', '1000000u64'],
+      inputTypes: ['address', 'u64'],
+      broadcast: true,
+    })
+    console.log('broadcast tx id:', txId)
+  }
+
+  return <button onClick={handleSend}>Send 1 credit</button>
+}
+```
+
+#### External Wallets
+Use `primaryWallet.requestTransaction(tx)`.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import type { AleoTransaction } from '@dynamic-labs/aleo'
+
+function SendCredits() {
+  const { primaryWallet } = useDynamicContext()
+
+  async function handleSend() {
+    if (!primaryWallet) return
+
+    const tx: AleoTransaction = {
+      address: primaryWallet.address,
+      chainId: 'aleo:testnet',
+      transitions: [
+        {
+          program: 'credits.aleo',
+          functionName: 'transfer_public',
+          inputs: [
+            'aleo1recipientaddress…',  // recipient
+            '1000000u64',              // 1 credit
+          ],
+        },
+      ],
+      fee: 250_000,        // 0.25 credits
+      feePrivate: false,
+    }
+
+    const txId = await primaryWallet.requestTransaction(tx)
+    console.log('broadcast tx id:', txId)
+  }
+
+  return <button onClick={handleSend}>Send 1 credit</button>
+}
+```
+For the prebuilt widget Send flow (with token picker, balance check, and fee estimation), the connector also exposes `createUiTransaction(fromAddress)` returning an `AleoUiTransaction` — the widget calls this internally.
+
+Both paths return a tx ID immediately on broadcast — **not** confirmation. Poll the Provable API to track inclusion (see [Read Chain State with Provable](#read-chain-state-with-the-provable-api)).
+
+:::tip
+Inputs must carry their type suffix (`1000000u64`, `aleo1…`, `42field`, `true`). For `proveTransaction`, supply matching `inputTypes` (`'u64'`, `'address'`, `'field'`, `'bool'`). Mismatches reject before the network. See the [Leo cheatsheet](https://docs.leo-lang.org/language/cheatsheet).
+:::
+
+### Switching Networks
+
+Embedded wallets support programmatic switching via `switchNetwork` on the connector. ChainIds are strings — `'0'` for mainnet, `'1'` for testnet — and the selection is persisted in `localStorage` under `dynamic_aleo_network_id`.
+
+```tsx
+// Embedded only
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
+
+function SwitchToMainnetButton() {
+  const { primaryWallet } = useDynamicContext()
+  if (!primaryWallet) return null
+  const connector = primaryWallet.connector as DynamicWaasAleoConnector
+  return (
+    <button onClick={() => connector.switchNetwork({ networkChainId: '0' })}>
+      Switch to mainnet
+    </button>
+  )
+}
+```
+
+External wallets set `switchNetworkOnlyFromWallet: true`. The user must switch from inside their wallet. Read `primaryWallet.chain` and gate UI:
+
+```tsx
+import type { ReactNode } from 'react'
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+const REQUIRED_CHAIN = 'aleo:testnet'
+
+function NetworkGuard({ children }: { children: ReactNode }) {
+  const { primaryWallet } = useDynamicContext()
+  if (!primaryWallet) return null
+  if (String(primaryWallet.chain) !== REQUIRED_CHAIN) {
+    return <p>Please switch to {REQUIRED_CHAIN} in your wallet.</p>
+  }
+  return <>{children}</>
+}
+```
+
+Use the typed `ALEO_CHAINS` constants instead of string literals:
+
+```ts
+import { ALEO_CHAINS } from '@provablehq/aleo-wallet-standard'
+// ALEO_CHAINS.MAINNET === 'aleo:mainnet'
+// ALEO_CHAINS.TESTNET === 'aleo:testnet'
+```
+
+### Fetching & Decrypting Records
+
+A user can only decrypt records they own. The two paths diverge here too.
+
+**External wallets** expose `requestRecords` and `decrypt` on `primaryWallet`:
+
+- `requestRecords(program, options?)` — fetch the user's records for a program. With `{ plaintext: true }` the wallet decrypts before returning.
+- `decrypt(ciphertext, options?)` — decrypt a single ciphertext from any source (chain query, indexer, event log) without exposing the view key.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function LoadCreditRecords() {
+  const { primaryWallet } = useDynamicContext()
+
+  async function load() {
+    if (!primaryWallet) return
+    const records = await primaryWallet.requestRecords('credits.aleo', { plaintext: true })
+    console.log('decrypted credit records:', records)
+  }
+
+  return <button onClick={load} disabled={!primaryWallet}>Load my records</button>
+}
+```
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function useDecryptRecord() {
+  const { primaryWallet } = useDynamicContext()
+
+  return async function decryptOne(ciphertext: string) {
+    if (!primaryWallet) return undefined
+    return primaryWallet.decrypt(ciphertext, {
+      programId: 'credits.aleo',
+      functionName: 'transfer_private',
+    })
+  }
+}
+```
+
+External wallets may prompt for view-key permission. Some wallet implementations don't expose these methods — feature-detect by inspecting `primaryWallet`.
+
+**Embedded wallets** index records through Provable's RecordScanner inside the iframe. The view key never leaves the iframe.
+
+- `listOwnedRecords()` — returns all owned records across programs. Each carries `program_name`, `record_name`, and `microcredits` (for `credits.aleo`).
+- `joinRecords({ programIds?, filterRecord? })` — pairwise-merges records down to one per program.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
+
+function LoadEmbeddedRecords() {
+  const { primaryWallet } = useDynamicContext()
+
+  async function load() {
+    if (!primaryWallet) return
+    const connector = primaryWallet.connector as DynamicWaasAleoConnector
+    const { records } = await connector.listOwnedRecords()
+    console.log('owned records:', records)
+  }
+
+  return <button onClick={load}>Load my records</button>
+}
+```
+
+### Signing Messages
+
+`signMessage(message: string): Promise<string>` signs a UTF-8 string with the wallet's Aleo key. The encoding (hex / base58) is wallet-specific — treat the result as opaque. Common use: a server issues a challenge, the user signs it, the server verifies. External wallets prompt via their own UI.
+
+:::warning
+`signMessage` throws `NotSupported` on embedded wallets in v4.80 — Sodot's `EdBls12377.sign(bytes)` ships in Phase 2. Use external wallets for sign-in-with-Aleo until then.
+:::
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function SignChallenge() {
+  const { primaryWallet } = useDynamicContext()
+
+  async function handleSign() {
+    if (!primaryWallet) return
+    const challenge = `auth:${Date.now()}:${crypto.randomUUID()}`
+    const signature = await primaryWallet.signMessage(challenge)
+    // POST { address: primaryWallet.address, challenge, signature } to your server
+  }
+
+  return <button onClick={handleSign} disabled={!primaryWallet}>Sign in with Aleo</button>
+}
+```
+
+Server-side verification needs Aleo's signature primitives — see the [Provable SDK](https://github.com/ProvableHQ/sdk).
+
+
+### Disconnecting
+
+`handleLogOut` ends the session and resets `primaryWallet`. Embedded users keep their account and key share — they can sign back in via the same auth method.
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+
+function DisconnectButton() {
+  const { handleLogOut, primaryWallet } = useDynamicContext()
+  if (!primaryWallet) return null
+  return <button onClick={handleLogOut}>Disconnect</button>
+}
+```
+{/* 
+## Read Chain State with the Provable API
+
+Dynamic handles auth and signing; chain reads are your job. The shortest path is the [Provable REST API](https://docs.explorer.provable.com/) — no API key needed for moderate use.
+
+Public credit balance:
+
+```ts
+async function getPublicBalance(address: string, network = 'testnet') {
+  const base = `https://api.explorer.provable.com/v1/${network}`
+  const res = await fetch(`${base}/program/credits.aleo/mapping/account/${address}`)
+  if (!res.ok) return 0n
+  const value = await res.text()           // e.g. "1000000u64"
+  return BigInt(value.replace(/u\d+$/, ''))
+}
+```
+
+Poll for tx confirmation:
+
+```ts
+async function waitForTx(txId: string, network = 'testnet', timeoutMs = 60_000) {
+  const base = `https://api.explorer.provable.com/v1/${network}`
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const res = await fetch(`${base}/transaction/${txId}`)
+    if (res.ok) return await res.json()
+    await new Promise(r => setTimeout(r, 2000))
+  }
+  throw new Error(`tx ${txId} not confirmed within ${timeoutMs}ms`)
+}
+```
+
+For mapping queries, blocks, and program metadata, see [docs.explorer.provable.com](https://docs.explorer.provable.com/). For typed helpers and local proof generation, install [`@provablehq/sdk`](https://github.com/ProvableHQ/sdk). */}
+{/* 
+## Best Practices
+
+### Error Handling
+
+Every connector method can throw. Wrap in try/catch and map to user-friendly messages:
+
+| Method                       | Failure                          | Message                                       |
+|------------------------------|----------------------------------|-----------------------------------------------|
+| `connect` (widget)           | No supported wallet installed    | "Install Shield, Puzzle, or Fox to connect."  |
+| `connect` (widget)           | User closed picker               | Silent — intentional cancel                   |
+| `signMessage`                | Embedded wallet (Phase 1)        | `NotSupported` — fall back to external wallet |
+| `signMessage`                | User rejected                    | "Signing was cancelled. Try again?"           |
+| `signMessage`                | Wallet locked                    | "Unlock your wallet and try again."           |
+| `requestTransaction`         | Insufficient balance             | "Not enough credits to cover the fee."        |
+| `requestTransaction`         | Wrong network                    | "Switch your wallet to `{REQUIRED_CHAIN}`."   |
+| `requestTransaction`         | User rejected                    | "Transaction cancelled."                      |
+| `requestTransaction`         | Broadcast failed                 | "Network error broadcasting. Retry?"          |
+| `proveTransaction`           | Sponsor / Feemaster declined     | Retry with user-paid fee, or surface error    |
+| `decrypt` / `requestRecords` | Wallet doesn't support it        | Feature-detect; hide UI                       |
+
+A reusable wrapper centralizes the message mapping:
+
+```tsx
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core'
+import type { AleoTransaction } from '@dynamic-labs/aleo'
+
+function useSafeRequestTransaction() {
+  const { primaryWallet } = useDynamicContext()
+
+  return async function send(tx: AleoTransaction) {
+    if (!primaryWallet) throw new Error('not connected')
+    try {
+      return await primaryWallet.requestTransaction(tx)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (/insufficient/i.test(message)) throw new Error('Not enough credits to cover the fee.')
+      if (/reject/i.test(message)) throw new Error('Transaction cancelled.')
+      throw err
+    }
+  }
+}
+```
+
+:::warning
+Wallet error strings are not standardized — Shield, Puzzle, Fox, and embedded each phrase failures differently. The substring matches are heuristics; instrument and refine over time.
+:::
+
+### Network Awareness
+
+- Read `primaryWallet.chain` defensively before issuing transactions — users can switch any time.
+- Use a `NetworkGuard` (see [Switching networks](#switching-networks)) to block transaction UI on the wrong chain.
+- Use `ALEO_CHAINS.MAINNET` / `ALEO_CHAINS.TESTNET` constants instead of string literals. */}
