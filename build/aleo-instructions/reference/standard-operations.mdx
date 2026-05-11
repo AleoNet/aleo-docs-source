@@ -105,10 +105,65 @@ ternary r0 r1 r2 into r3;   // if r0 then r1 else r2
 | `deserialize.bits` | Deserializes an array of booleans to a value (Aleo variant encoding) |
 | `deserialize.bits.raw` | Deserializes an array of booleans to a value (raw bit encoding) |
 
-## Dynamic Record Access
+## Dynamic Dispatch
 
-*Added in Consensus V14.*
+*Added in Consensus V14 ([ARC-0009](https://vote.aleo.org/p/arc-0009)).*
+
+Dynamic dispatch enables programs to invoke functions determined at runtime, unlocking interface patterns, pluggable libraries, and composable protocols.
+
+### `call.dynamic`
+
+Invokes a function whose target is resolved at runtime.
+
+```aleo
+call.dynamic <PROG> <NET> <FUN> with <INPUTS> (as <INPUT_TYPES>) into <OUTPUTS> (as <OUTPUT_TYPES>);
+```
+
+Identifiers can be written as quoted literals (`'credits'`, `'aleo'`, `'transfer_public'`), which are treated as field elements. A variable of type `field` is also accepted.
+
+```aleo showLineNumbers
+program token_router.aleo;
+
+// Route a transfer to any compatible token program
+function route_transfer:
+    input r0 as field.public;          // token program name
+    input r1 as address.public;        // recipient
+    input r2 as u64.public;            // amount
+    call.dynamic r0 'aleo' 'transfer' with r1 r2 (as address.public u64.public) into r3 (as future.dynamic);
+    async route_transfer r3 into r4;
+    output r4 as token_router.aleo/route_transfer.future;
+
+finalize route_transfer:
+    input r0 as future.dynamic;
+    await r0;
+```
+
+**Allowed types:**
+
+| Position | Allowed | Disallowed |
+|----------|---------|------------|
+| Inputs | Plaintext types, `record.dynamic` | `record`, external record, `future`, `future.dynamic` |
+| Outputs | Plaintext types, `record.dynamic`, `future.dynamic` | `record`, external record, `future` |
+
+**Restrictions:**
+
+- `call.dynamic` can only appear in function bodies, not finalize blocks.
+- The target program, network, and function are **public** circuit inputs. Do not use private data to select a call target — the target is observable.
+- Dynamic targets cannot be resolved from onchain mappings at runtime. Callers supply targets as inputs (queried offchain), and finalize logic can verify them against stored values.
+
+**Type translation:** when a `record.dynamic` is passed to a callee expecting a static record (or vice versa), the AVM automatically runs a translation circuit proving consistency between the two representations.
+
+### Dynamic Record Access
 
 | Opcode | Description |
 |--------|-------------|
-| `get.record.dynamic` | Dynamically accesses a record entry |
+| `get.record.dynamic` | Retrieves a named field from a `record.dynamic` by verifying a Merkle proof that the entry exists with the specified type |
+
+```aleo
+get.record.dynamic r0.microcredits into r1 as u64;
+get.record.dynamic r0.metadata into r2 as [u8; 32u32];
+```
+
+If the field does not exist or has an incompatible type, the Merkle proof fails and execution reverts. This enforces implicit record interfaces: any record containing the required fields satisfies the check, regardless of which program defined it.
+
+The `owner` field is accessible directly without Merkle verification: `r0.owner`.

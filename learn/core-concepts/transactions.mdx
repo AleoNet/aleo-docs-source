@@ -24,6 +24,28 @@ An execute transaction contains:
 
 Publishes a new program to the network. A deploy transaction includes the program bytecode, verification keys for each function, and the deployer's signature.
 
+### Program Upgrade
+
+A program upgrade uses the same deploy transaction format with `edition` incremented by 1 each time, allowing program logic to change without migrating state.
+
+Upgradability must be designed in from the start: every upgradable program includes a `constructor`, an immutable block executed by the AVM on every deployment and upgrade (but never on normal function calls). Because the `constructor` cannot be changed after deployment, it serves as the permanent onchain governance rule for who can upgrade and under what conditions.
+
+Three metadata operands are available within `constructor` and `finalize` scope:
+
+| Operand | Type | Description |
+|:--------|:----:|:------------|
+| `edition` | `u16` | Version counter. `0u16` on first deploy; increments by 1 on each upgrade. |
+| `checksum` | `[u8; 32u32]` | SHA3-256 hash of the program bytecode. |
+| `program_owner` | `address` | Address of the account that submitted the deployment. |
+
+| Component | Delete | Modify | Add |
+|:----------|:------:|:------:|:---:|
+| `struct`, `record`, `mapping`, `closure`, `import` | ❌ | ❌ | ✅ |
+| `function` / `finalize` logic | ❌ | ✅ | ✅ |
+| `constructor` | ❌ | ❌ | ❌ |
+
+Programs deployed before upgradability was activated have no `constructor` and are permanently non-upgradable — there is no migration path. For the full specification, governance patterns, and Leo syntax, see [ARC-0006](https://vote.aleo.org/p/arc-0006) and the [Program Upgradability guide](/leo-docs-source/documentation/guides/program_upgradability).
+
 ### Fee
 
 A standalone fee transaction, generated when an execute or deploy transaction is **rejected**. The original logic fails, but the fee is still collected to prevent spam.

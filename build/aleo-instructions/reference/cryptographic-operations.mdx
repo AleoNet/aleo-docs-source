@@ -98,11 +98,43 @@ All ECDSA opcodes take 3 operands (signature, address, message) and return a Boo
 
 ## SNARK Verification
 
-*Added in Consensus V14.*
+*Added in Consensus V14 ([ARC-0008](https://vote.aleo.org/p/arc-0008)).*
 
-Currently limited to Varuna proofs, with the possibility to extend to other proof systems in the future.
+Currently limited to Varuna proofs, with the possibility to extend to other proof systems in the future. Both opcodes are **finalize-only** and must be called within a `finalize` block.
 
 | Opcode | Description |
 |--------|-------------|
 | `snark.verify` | Verifies a single SNARK proof |
 | `snark.verify.batch` | Batch verification of multiple SNARK proofs |
+
+### `snark.verify`
+
+Verifies a Varuna proof against a verifying key and the public inputs, storing the boolean result in the destination register.
+
+```aleo
+snark.verify r0 r1 r2 into r3;
+```
+
+| Operand | Type | Description |
+|---------|------|-------------|
+| `r0` | `[U8; N]` | Verifying key |
+| `r1` | `[Field; M]` | Public inputs |
+| `r2` | `[U8; P]` | Proof |
+| `r3` | `Boolean` | Verification result |
+
+### `snark.verify.batch`
+
+Batch-verifies multiple Varuna proofs against an array of verifying keys, a nested array of public inputs, and a single batch proof.
+
+```aleo
+snark.verify.batch r0 r1 r2 into r3;
+```
+
+| Operand | Type | Description |
+|---------|------|-------------|
+| `r0` | `[[U8; N]; num_keys]` | Array of verifying keys |
+| `r1` | `[[[Field; M]; num_instances]; num_keys]` | Nested array of public inputs per circuit per key |
+| `r2` | `[U8; P]` | Batch proof |
+| `r3` | `Boolean` | Batch verification result |
+
+Compile-time limits apply: **maximum 32 circuits, maximum 128 total instances** across all circuits.

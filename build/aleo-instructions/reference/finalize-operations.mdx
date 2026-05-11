@@ -50,6 +50,14 @@ get credits.aleo/account[aleo1...] into r0;
 get.or_use credits.aleo/account[aleo1...] 0u64 into r1;
 ```
 
+The `.dynamic` variants resolve the program and mapping name from `field` operands at runtime ([ARC-0009](https://vote.aleo.org/p/arc-0009)):
+
+```aleo
+get.dynamic <PROG> <NET> <MAP>[<KEY>] into <DEST> as <TYPE>;
+get.or_use.dynamic <PROG> <NET> <MAP>[<KEY>] <DEFAULT> into <DEST> as <TYPE>;
+contains.dynamic <PROG> <NET> <MAP>[<KEY>] into <DEST>;
+```
+
 ## Control Flow
 
 | Command | Syntax | Description |

@@ -56,6 +56,8 @@ r0[r1] into r2;
 r0[0u32][1u32] into r1;
 ```
 
+The maximum array size is **2,048 elements** (increased from 512 in Aleo Stack v4.6.0 to support verifying keys and proofs used by [`snark.verify`](cryptographic-operations#snark-verification)).
+
 ### Records
 
 Records represent private, user-owned state. They must include an `owner` field. Transactions consume existing records and produce new ones.
@@ -82,6 +84,45 @@ mapping account:
     key as address.public;
     value as u64.public;
 ```
+
+### Dynamic Records
+
+*Added in Consensus V14.*
+
+A `record.dynamic` is a fixed-size, general representation of any record, usable across [dynamic call](standard-operations#control-flow) boundaries. Unlike a static record, its size is constant regardless of the number or type of its data fields.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `owner` | `address` | The owner of the record |
+| `_root` | `field` | Merkle root of the record's data entries |
+| `_nonce` | `group` | The record nonce |
+| `_version` | `u8` | Record version |
+
+A `record.dynamic` cannot be instantiated directly. It must be received as input, returned from `call.dynamic`, or created by casting a static record:
+
+```aleo
+cast r0 into r1 as record.dynamic;
+```
+
+The `owner` field is accessible directly (`r1.owner`). Other fields require [`get.record.dynamic`](standard-operations#dynamic-record-access).
+
+:::caution
+Functions accepting `record.dynamic` do **not** verify ownership or nullify the record. Only functions that receive a static record input consume (nullify) the record.
+:::
+
+### Dynamic Futures
+
+*Added in Consensus V14.*
+
+A `future.dynamic` is produced exclusively by `call.dynamic` when the callee returns a future. Like a static future, it must be consumed by `async` and awaited in finalize:
+
+```aleo
+finalize my_function:
+    input r0 as future.dynamic;
+    await r0;
+```
+
+A `future.dynamic` cannot be output directly by a function — it must be wrapped in a static future via the `async` instruction.
 
 ## Visibility
 
