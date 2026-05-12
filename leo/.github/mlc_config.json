@@ -1,8 +1,0 @@
-{
-  "retryOn429": true,
-  "retryCount": 3,
-  "fallbackRetryDelay": "30s",
-  "ignorePatterns": [
-    { "pattern": "^https://api\\.explorer\\.provable\\.com" }
-  ]
-}
