@@ -15,7 +15,7 @@ Aleo gives developers two ways to store data, and they can use both within the s
 
 - Only the owner (and anyone with their view key) can decrypt a record's contents
 - Records are stored onchain in encrypted form
-- Executed and procuded **offchain** as part of a transition, with a ZK proof submitted for verification
+- Executed and produced **offchain** as part of a transition, with a ZK proof submitted for verification
 
 Each record has its own **record view key**, derived when the record is created. The record view key allows decryption of that specific record without needing the account-level [view key](/learn/core-concepts/accounts-and-keys#view-key). This means a user can share a record view key with an auditor or counterparty to reveal the contents of a single record — without exposing any other records or transaction history on the account.
 
@@ -28,7 +28,7 @@ Public state follows an account-based model, similar to Ethereum. Data is stored
 - Anyone can read a mapping's contents
 - Updates are executed **onchain** in the async function phase of a transaction
 
-For example, `credits.aleo` stores public balances in a mapping where the key is an address and the value is a microcredit balance.  This is exactly how Ethereum tracks account balances.
+For example, `credits.aleo` stores public balances in a mapping where the key is an address and the value is a microcredit balance.
 
 ## Choosing Between Public and Private State
 
