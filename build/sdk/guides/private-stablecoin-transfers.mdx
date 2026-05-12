@@ -1,0 +1,86 @@
+---
+id: private_stablecoin_transfers
+title: Private Stablecoin Transfers
+sidebar_label: Private Stablecoin Transfers
+sidebar_position: 11
+---
+
+## Background
+
+Aleo supports two stablecoins backed by blue-chip asset issuers: **USAD** and **USDCx**. The main features distinguishing these stablecoins from other assets on Aleo are:
+
+- A privacy-preserving freeze list check
+- A built-in mechanism enabling a monitoring service to observe private transfers without compromising the privacy of those transactions to the rest of the network
+
+Developers will need to support additional configuration for handling the freeze list check component for `transfer_private` and `transfer_private_to_public`. The freeze list check entails fetching a `BigInt` array representation of the Merkle-ized freeze list and creating an **exclusion proof**.
+
+The [Provable API](https://docs.explorer.provable.com/) supports an endpoint that can retrieve this array (see steps below), while the developer will need to compute the exclusion proof locally using the array as an input. Local computation of the Merkle exclusion proof preserves the privacy of the account since the address is never shared with the API service.
+
+Provable provides API endpoints for querying the Merkle root:
+
+| Stablecoin | Testnet | Mainnet |
+|---|---|---|
+| USAD | [Endpoint](https://api.explorer.provable.com/v2/testnet/program/test_usad_freezelist.aleo/mapping/freeze_list_root/1u8) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/program/usad_freezelist.aleo/mapping/freeze_list_root/1u8) |
+| USDCx | [Endpoint](https://api.explorer.provable.com/v2/testnet/program/test_usdcx_freezelist.aleo/mapping/freeze_list_root/1u8) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/program/usdcx_freezelist.aleo/mapping/freeze_list_root/1u8) |
+
+:::note
+For `transfer_public` and `transfer_public_to_private`, accounts hold assets in a public state and therefore generating the exclusion proof isn't necessary. The freeze list check can reference the public mapping containing the list of frozen addresses to check non-inclusion.
+:::
+
+## Transfer Function Interfaces
+
+```leo
+transfer_private(
+    recipient: address,
+    amount: u128,
+    input_record: Token,
+    sender_merkle_proofs: [MerkleProof; 2],
+)
+
+transfer_private_to_public(
+    public recipient: address,
+    public amount: u128,
+    input_record: Token,
+    sender_merkle_proofs: [MerkleProof; 2],
+)
+```
+
+## Computing the Exclusion Proof
+
+Sequence of operations to compute a formatted Merkle exclusion proof of type `[MerkleProof; 2]` using the [Provable SDK](https://github.com/ProvableHQ/sdk):
+
+1. Fetch the Merkle tree object from the appropriate Provable API endpoint.
+
+    | Stablecoin | Testnet | Mainnet |
+    |---|---|---|
+    | USAD | [Endpoint](https://api.explorer.provable.com/v2/testnet/programs/test_usad_freezelist.aleo/compliance/freeze-list) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/programs/usad_freezelist.aleo/compliance/freeze-list) |
+    | USDCx | [Endpoint](https://api.explorer.provable.com/v2/testnet/programs/test_usdcx_freezelist.aleo/compliance/freeze-list) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list) |
+2. Convert the string array to a `BigInt` array using [`convertTreeToBigInt()`](../api-reference/sealance-merkle-tree.mdx#converttreetobigint).
+3. Compute the two index values needed to generate the exclusion proof routes for the account submitting the transaction using [`getLeafIndices()`](../api-reference/sealance-merkle-tree.mdx#getleafindices).
+4. Get the sibling path for each leaf index by calling [`getSiblingPath()`](../api-reference/sealance-merkle-tree.mdx#getsiblingpath) on each leaf. Be sure to indicate a depth of 16.
+5. Format the Merkle proof using [`formatMerkleProof()`](../api-reference/sealance-merkle-tree.mdx#formatmerkleproof).
+
+```typescript
+import { SealanceMerkleTree } from '@provablehq/sdk';
+
+// --- Config ---
+const PRIVATE_KEY = 'APrivateKey1zkp...'; // Replace with your private key
+const API_URL = 'https://api.explorer.provable.com/v2';
+const PROGRAM = 'test_usdcx_stablecoin.aleo';
+
+// --- Build the exclusion proof ---
+const sealance = new SealanceMerkleTree();
+
+const latestMerkleTree = []; // Replace with latest Merkle Tree
+const tree = sealance.convertTreeToBigInt(latestMerkleTree);
+
+const myAddress = 'aleo1...'; // Replace with desired address
+const [leftIdx, rightIdx] = sealance.getLeafIndices(tree, myAddress);
+
+const proofLeft = sealance.getSiblingPath(tree, leftIdx, 16);
+const proofRight = sealance.getSiblingPath(tree, rightIdx, 16);
+
+const formattedProof = sealance.formatMerkleProof([proofLeft, proofRight]);
+```
+## Next Steps
+Once computed, the developer should store the exclusion proof along with the last element of the `BigInt` array. This exclusion proof can be reused until the freeze list is updated. The developer can check for freeze list updates by querying the Merkle root value from the freeze list program's mapping and checking if it matches the last element of the Merkle tree array. 
