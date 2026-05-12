@@ -25,7 +25,7 @@ Dynamic also allows users the flexibility to connect **external wallets** like *
 | **User Onboarding**          | Email / social / passkey, no install            | Wallet extension required                  |
 | **Recovery**                 | Export key, iCloud / Google Drive backup        | User's wallet                              |
 | **Transaction Execution**    | `proveTransaction()`                            | `requestTransaction()`                     |
-| **Message Signing**          | Not yet supported (v4.8.0)                      | Supported                                  |
+| **Message Signing**          | Not yet supported (v4.83)                       | Supported                                  |
 
 {/* :::warning Embedded vs. External
 - **Transaction execution** — uses `proveTransaction({ programId, functionName, inputs, inputTypes })` on the connector, not `requestTransaction(tx)`. See [Executing Programs](#executing-programs).
@@ -173,21 +173,23 @@ function WalletInfo() {
 ### Executing Programs
 
 #### Embedded Wallets:
-Use `proveTransaction` on the WaaS connector. Sodot MPC signs inside the iframe; Provable's DPS proves and broadcasts. Fees for `credits.aleo` are sponsored by ANF's Feemaster.
+Call `proveTransaction` directly on the wallet (v4.82+). Sodot MPC signs inside the iframe; Provable's DPS proves and broadcasts. Fees for `credits.aleo` are sponsored by ANF's Feemaster. Use `isAleoWallet` to narrow the wallet's type before calling Aleo-specific methods.
 
 ```ts
-import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
+import { isAleoWallet } from '@dynamic-labs/aleo'
 
-const connector = primaryWallet.connector as DynamicWaasAleoConnector
+if (!primaryWallet || !isAleoWallet(primaryWallet)) return
 
-const { txId } = await connector.proveTransaction({
+const { txId } = await primaryWallet.proveTransaction({
   programId: 'credits.aleo',
   functionName: 'transfer_public',
   inputs: ['aleo1recipientaddress…', '1000000u64'],
-  inputTypes: ['address', 'u64'],
+  inputTypes: ['address.public', 'u64.public'],
   broadcast: true,
 })
 ```
+
+Visibility suffixes on `inputTypes` (`.public` / `.private`) must match the transition's parameter visibility — `transfer_private` takes `['credits.record', 'address.private', 'u64.private']`.
 
 #### External Wallets
 Use `primaryWallet.requestTransaction(tx)`.
@@ -214,15 +216,16 @@ For the prebuilt widget Send flow (with token picker, balance check, and fee est
 Both paths return a tx ID immediately on broadcast — **not** confirmation. Poll the [Provable API](https://docs.explorer.provable.com/) to track inclusion.
 
 :::tip
-Inputs must carry their type suffix (`1000000u64`, `aleo1…`, `42field`, `true`). For `proveTransaction`, supply matching `inputTypes` (`'u64'`, `'address'`, `'field'`, `'bool'`). Mismatches reject before the network. See the [Leo cheatsheet](https://docs.leo-lang.org/language/cheatsheet).
+Inputs must carry their type suffix (`1000000u64`, `aleo1…`, `42field`, `true`). For `proveTransaction`, `inputTypes` must include both the type and the visibility (`'u64.public'`, `'address.private'`, `'field.public'`, `'credits.record'`). Mismatches reject before the network. See the [Leo cheatsheet](https://docs.leo-lang.org/language/cheatsheet).
 :::
 
 ### Switching Networks
 
-Embedded wallets support programmatic switching via `switchNetwork` on the connector. ChainIds are strings — `'0'` for mainnet, `'1'` for testnet — and the selection is persisted in `localStorage` under `dynamic_aleo_network_id`.
+Embedded wallets support programmatic switching via `switchNetwork`, which still lives on the connector (not yet promoted to the wallet as of v4.83). ChainIds are strings — `'0'` for mainnet, `'1'` for testnet — and the selection is persisted in `localStorage` under `dynamic_aleo_network_id`.
 
 ```ts
-// Embedded only
+import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
+
 const connector = primaryWallet.connector as DynamicWaasAleoConnector
 await connector.switchNetwork({ networkChainId: '0' })  // '0' mainnet, '1' testnet
 ```
@@ -273,14 +276,16 @@ const decrypted = await primaryWallet.decrypt(ciphertext, {
 
 External wallets may prompt for view-key permission. Some wallet implementations don't expose these methods — feature-detect by inspecting `primaryWallet`.
 
-**Embedded wallets** index records through Provable's RecordScanner inside the iframe. The view key never leaves the iframe.
+**Embedded wallets** index records through Provable's RecordScanner inside the iframe. The view key never leaves the iframe. Methods are on the wallet itself (v4.82+):
 
-- `listOwnedRecords()` — returns all owned records across programs. Each carries `program_name`, `record_name`, and `microcredits` (for `credits.aleo`).
+- `listOwnedRecords()` — returns all owned records across programs. Each carries `program_name`, `record_name`, and `record_plaintext`.
 - `joinRecords({ programIds?, filterRecord? })` — pairwise-merges records down to one per program.
 
 ```ts
-const connector = primaryWallet.connector as DynamicWaasAleoConnector
-const { records } = await connector.listOwnedRecords()
+import { isAleoWallet } from '@dynamic-labs/aleo'
+
+if (!primaryWallet || !isAleoWallet(primaryWallet)) return
+const { records } = await primaryWallet.listOwnedRecords()
 ```
 
 ### Signing Messages
@@ -288,7 +293,7 @@ const { records } = await connector.listOwnedRecords()
 `signMessage(message: string): Promise<string>` signs a UTF-8 string with the wallet's Aleo key. The encoding (hex / base58) is wallet-specific — treat the result as opaque. Common use: a server issues a challenge, the user signs it, the server verifies. External wallets prompt via their own UI.
 
 :::warning
-`signMessage` throws `NotSupported` on embedded wallets in v4.80 — Sodot's `EdBls12377.sign(bytes)` ships in Phase 2.
+`signMessage` throws `NotSupported` on embedded wallets as of v4.83 — Sodot's `EdBls12377.sign(bytes)` ships in Phase 2. External Aleo wallets (Shield, Puzzle, Fox) support it today.
 :::
 
 ```ts
