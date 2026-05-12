@@ -7,8 +7,7 @@ Markdown and MDX source files for the Aleo documentation site. This repo contain
 ```
 aleo-docs-source/
 ├── learn/         # Conceptual documentation (What is Aleo, Core Concepts, Network, Advanced)
-├── build/         # Developer documentation (Aleo Instructions, SDK, Wallet Adapter, Standards)
-├── leo/           # Leo language documentation (CLI, Language, Guides, Examples)
+├── build/         # Developer documentation (Leo, Aleo Instructions, SDK, Wallet Adapter, Standards)
 └── participate/   # User-facing guides (Wallets, Getting Tokens, Staking, Run a Node, Governance)
 ```
 
