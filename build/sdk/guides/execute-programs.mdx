@@ -11,7 +11,7 @@ sidebar_position: 4
 The SDK provides the ability to execute Aleo Instructions programs entirely client-side within the browser.
 
 The `ProgramManager` object encapsulates the functionality for executing programs and making zero knowledge proofs about
-them. Under the hood it uses cryptographic code compiled from [snarkVM](../../guides/aleo/00_aleo_overview.md) into WebAssembly.
+them. Under the hood it uses cryptographic code compiled from [snarkVM](https://github.com/ProvableHQ/snarkVM) into WebAssembly.
 JavaScript bindings to this WebAssembly code allows execution of programs in zero knowledge fully within the browser
 without requiring any external communication with the internet. Users interested in lower level details on how this is
 achieved can visit the [aleo-wasm](https://github.com/ProvableHQ/sdk/tree/mainnet/wasm) crate.
@@ -51,7 +51,7 @@ Let's walk through an example:
 
 ### Setup
 
-Similar to the [Deploying Programs](./03_deploy_programs.md) guide, you'll need to initialize some fundamental objects if you haven't already done so:
+Similar to the [Deploying Programs](./deploy-programs.mdx) guide, you'll need to initialize some fundamental objects if you haven't already done so:
 
 ```typescript
 import { Account, initThreadPool, ProgramManager, AleoKeyProvider } from '@provablehq/sdk';

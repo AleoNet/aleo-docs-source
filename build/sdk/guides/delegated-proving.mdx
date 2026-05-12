@@ -5,11 +5,9 @@ sidebar_label: Delegated Proving
 sidebar_position: 9
 ---
 
-# Delegated Proving Service (DPS)
+This guide explains how to use the **Delegated Proving Service (DPS)** to generate proofs for Aleo programs via Provable's infrastructure. For discovering and querying records that belong to your account, see the [Record Scanning](./record-scanning.mdx) guide.
 
-This guide explains how to use the **Delegated Proving Service (DPS)** to generate proofs for Aleo programs via Provable's infrastructure. For discovering and querying records that belong to your account, see the [Record Scanning](../record-scanning/00_record_scanning.md) guide.
-
-# Contents
+## Contents
 
 - [Overview](#overview)
 - [Credentials and authentication](#credentials-and-authentication)
@@ -19,7 +17,7 @@ This guide explains how to use the **Delegated Proving Service (DPS)** to genera
 
 ---
 
-# Overview
+## Overview
 
 The Aleo blockchain allows users to execute programs on-chain while preserving the privacy of the inputs and outputs to 
 those functions. This enables applications like private value transfers, private identity verification, private swaps 
@@ -38,7 +36,7 @@ Generally this works in the following way:
 
 ---
 
-# Usage Guide
+## Usage Guide
 
 This guide shows how to access the delegated proving service with JS/TS either using the Provable SDK or
 custom TS/JS code.
@@ -359,4 +357,4 @@ You can add retries for 500/503 and JWT refresh when the token is expired.
 2. **Handle prover errors explicitly:** Use `submitProvingRequestSafe` when you want to branch on status (400 vs 500/503) without try/catch; use `submitProvingRequest` when you want the SDK to throw after retries.
 3. **JWT and cookies:** For DPS with the Provable API, supply `apiKey` and `consumerId` (or a valid `jwtData`) so the SDK can refresh the JWT. In Node, forward the `/pubkey` response cookie to `/prove/encrypted` when the prover uses session cookies.
 4. **Fee master:** When the prover or your deployment supports a fee master, set `useFeeMaster: true` in proving request options so no fee authorization is built; the prover pays the fee on your behalf.
-5. **Record scanner with ProgramManager:** You can pass a [Record Scanner](../record-scanning/00_record_scanning.md) (or any `RecordProvider`) into `ProgramManager`. The manager will then use it to resolve fee records (and inputs) when building executions or proving requests, so you do not have to fetch fee records manually.
+5. **Record scanner with ProgramManager:** You can pass a [Record Scanner](./record-scanning.mdx) (or any `RecordProvider`) into `ProgramManager`. The manager will then use it to resolve fee records (and inputs) when building executions or proving requests, so you do not have to fetch fee records manually.

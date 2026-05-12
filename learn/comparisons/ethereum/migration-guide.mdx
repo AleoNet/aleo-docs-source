@@ -185,7 +185,7 @@ program storage.aleo {
 
 **Key Differences:**
 - **Solidity Visibility**: `private`, `internal`, `public` control code access but all data is visible on-chain
-- **Leo Privacy**: `public` vs `private` determines actual cryptographic privacy - whether data is stored on-chain or off-chain in [records](../../concepts/fundamentals/02_records.md)
+- **Leo Privacy**: `public` vs `private` determines actual cryptographic privacy - whether data is stored on-chain or off-chain in [records](/learn/core-concepts/public-and-private-state)
 - **Constants**: Solidity has both `constant` and `immutable`, Leo only has compile-time `const`
 - **Local Variables**: The `let` keyword declares temporary computation variables (similar to Solidity's memory)
 - **No Transient Storage**: Leo does not support Solidity's transient storage concept
@@ -1464,5 +1464,5 @@ Leo does not support inline assembly:
 
 - **No Yul-like Integration**: Cannot insert low-level assembly code
 - **Separate IR**: Aleo Instructions exist as a separate language, not embeddable in Leo.
-- **Standalone Programs**: Aleo Instructions can be written as standalone programs in `.aleo` files, enabling fine-grained control over program execution and circuit design at a low level. For more details about Aleo Instructions, see the [Aleo Instructions Overview](../../guides/aleo/00_aleo_overview.md).
+- **Standalone Programs**: Aleo Instructions can be written as standalone programs in `.aleo` files, enabling fine-grained control over program execution and circuit design at a low level. For more details about Aleo Instructions, see the [Aleo Instructions Overview](/build/aleo-instructions/overview).
 

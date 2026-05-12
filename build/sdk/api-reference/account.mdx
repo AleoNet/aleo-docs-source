@@ -67,7 +67,7 @@ assert(myRandomAccount.verify(hello_world, signature));
 
 <a name="new_Account_new"></a>
 
-### Account
+### Account {#new_Account_new}
 
 <p>Create a new Aleo Account from a random seed, an existing private key, or a provided seed array.</p>
 
@@ -601,7 +601,7 @@ console.log(isInvalid); // false
 
 <p>Securely destroys the account by zeroizing and freeing all sensitive key material from WASM memory. After calling this method, the account object should not be used. This is the recommended way to clean up an account when it is no longer needed in security-sensitive applications.</p>
 
-<p>In ES2024+ environments that support the <code>using</code> declaration, the account implements <code>[Symbol.dispose]()</code> so cleanup is automatic when the block exits.</p>
+<p>In ES2024+ environments that support the <code>using</code> declaration, the account implements <code>{'[Symbol.dispose]()'}</code> so cleanup is automatic when the block exits.</p>
 
 ```javascript
 account.destroy()

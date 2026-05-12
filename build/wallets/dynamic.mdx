@@ -211,7 +211,7 @@ const txId = await primaryWallet.requestTransaction(tx)
 ```
 For the prebuilt widget Send flow (with token picker, balance check, and fee estimation), the connector also exposes `createUiTransaction(fromAddress)` returning an `AleoUiTransaction` — the widget calls this internally.
 
-Both paths return a tx ID immediately on broadcast — **not** confirmation. Poll the Provable API to track inclusion (see [Read Chain State with Provable](#read-chain-state-with-the-provable-api)).
+Both paths return a tx ID immediately on broadcast — **not** confirmation. Poll the [Provable API](https://docs.explorer.provable.com/) to track inclusion.
 
 :::tip
 Inputs must carry their type suffix (`1000000u64`, `aleo1…`, `42field`, `true`). For `proveTransaction`, supply matching `inputTypes` (`'u64'`, `'address'`, `'field'`, `'bool'`). Mismatches reject before the network. See the [Leo cheatsheet](https://docs.leo-lang.org/language/cheatsheet).

@@ -5,11 +5,9 @@ sidebar_label: Record Scanning
 sidebar_position: 10
 ---
 
-# Record Scanning Service (RSS)
-
 This guide explains the **Record Scanning Service (RSS)** and how to use it to discover and query records that belong to your Aleo account.
 
-# Contents
+## Contents
 
 - [Overview](#overview)
 - [Credentials and authentication](#credentials-and-authentication)
@@ -23,7 +21,7 @@ This guide explains the **Record Scanning Service (RSS)** and how to use it to d
 
 ---
 
-# Overview
+## Overview
 
 The Aleo network uses UTXO style struct data structures called `Records` to share encrypted information between parties.
 Records can represent arbitrary information (depending on the context of the program it's defined in) such as transfers
@@ -56,7 +54,7 @@ private balances.
 
 ---
 
-# Usage Guide
+## Usage Guide
 
 This guide shows how to access the record scanning service with JS/TS either using the Provable SDK or
 custom TS/JS code.
@@ -105,7 +103,7 @@ sequenceDiagram
     Scanner-->>-Client: { "uuid": string, "job_id"?: string, "status"?: string }
 ```
 
-## Key Routes
+## Key Routes {#key-routes-record-scanner}
 
 All paths are relative to the scanner base URL (e.g. `https://api.provable.com/scanner/mainnet` or your scanner host + network).
 
@@ -157,7 +155,7 @@ const records = await recordScanner.findRecords({
 
 ---
 
-### Using custom JavaScript
+### Using custom JavaScript {#using-custom-javascript-record-scanner}
 
 If you prefer not to use the SDK for HTTP, you can call the same endpoints with `fetch` and use the SDK only for encryption.
 
@@ -306,4 +304,4 @@ You can define `OwnedRecord` to match the scanner response shape, or import it f
 
 1. **Prefer encrypted flow** for production so your view key is only decrypted inside the service's secure environment.
 2. **Register before querying:** Complete registration (encrypted or not) and store the returned `uuid` before calling `/records/owned`. On 422 from `/records/owned`, re-register and retry once.
-3. **Record scanner with ProgramManager:** You can pass a `RecordScanner` (or any `RecordProvider`) into `ProgramManager`. The manager will then use it to resolve fee records (and inputs) when building executions or proving requests, so you do not have to fetch fee records manually. See the [Delegated Proving](../delegate-proving/00_delegate_proving.md) guide for proving workflows.
+3. **Record scanner with ProgramManager:** You can pass a `RecordScanner` (or any `RecordProvider`) into `ProgramManager`. The manager will then use it to resolve fee records (and inputs) when building executions or proving requests, so you do not have to fetch fee records manually. See the [Delegated Proving](./delegated-proving.mdx) guide for proving workflows.
