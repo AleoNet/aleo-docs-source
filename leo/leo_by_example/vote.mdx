@@ -41,7 +41,7 @@ The `.env` file contains a private key and network type. This is the account tha
 - [Step 2: Voter 2 issues a ticket and makes a vote](#step2)
 - [Step 3: How votes are tallied](#step3)
 
-## <a id="functions"></a> Functions
+## Functions {#functions}
 
 ### Propose
 
@@ -57,7 +57,7 @@ A ticket is a record with an `owner` and a proposal id `pid`. A ticket can be us
 
 A ticket owner can use their ticket record to vote `agree` / `disagree` with the specific proposal - `pid`. Since the ticket record can be used as an input privately, the voter's privacy is protected.
 
-## <a id="step0"></a> Create a Proposal
+## Create a Proposal {#step0}
 
 We will be playing the role of three parties.
 
@@ -115,7 +115,7 @@ Output
 
 You'll see that the output generates a new record with the proposal information and sets a public mapping with the proposal id as an argument input. The public mapping will be queryable onchain.
 
-## <a id="step1"></a> Voter 1 makes a vote
+## Voter 1 makes a vote {#step1}
 
 Let's create a new private ticket to make a vote. Take on the role of voter 1 and run the `new_ticket` function. The inputs take a unique ticket ID and the voter's public address.
 
@@ -170,7 +170,7 @@ Output
 
 ```
 
-## <a id="step2"></a> Voter 2 makes a vote
+## Voter 2 makes a vote {#step2}
 
 Let's create a new private ticket for voter 2. Take on the role of voter 2 and run the `new_ticket` function. The inputs take a unique ticket ID and the voter's public address.
 
@@ -222,6 +222,6 @@ Output
 }
 ```
 
-## <a id="step3"></a> How votes are tallied
+## How votes are tallied {#step3}
 
 Votes on the ticket are private. But the sum total of the agreements and disagreements are shown onchain in the public mapping. You can query this data onchain.

@@ -62,7 +62,7 @@ The `.env` file contains a private key and address. This is the account that wil
 - [Step 2: Wait](#wait)
 - [Step 3: Withdraw Tokens](#withdraw)
 
-## <a id="issue"></a> Issue Tokens
+## Issue Tokens {#issue}
 
 We will be playing the role of two parties.
 
@@ -97,7 +97,7 @@ Output
 }
 ```
 
-## <a id="deposit"></a> Deposit Tokens
+## Deposit Tokens {#deposit}
 
 Now, let's have the user deposit 50 of their tokens with the bank. We'll take the role of the user and call the deposit function, having the user use the output record that was issued to them by the bank. The inputs are the output record from the `issue` function and the amount the user wishes to deposit.
 
@@ -134,13 +134,13 @@ Output
 
 You'll see that the output contains a new private record belonging to the user with 50 credits, and finalization data indicating code to be run onchain and its associated inputs.
 
-## <a id="wait"></a> Wait
+## Wait {#wait}
 
 With the 50 token deposit, let's say 15 periods of time pass with compounding interest at a rate of 12.34% on the principal amount.
 
 You can run the calculation yourself, it comes out to 266 tokens accrued using those numbers.
 
-## <a id="withdraw"></a> Withdraw Tokens
+## Withdraw Tokens {#withdraw}
 
 Now, let's have the bank withdraw all tokens after 15 periods. Let's switch to the bank role, and call the `withdraw` function. The inputs are the recipient's address, amount, rate, and periods.
 

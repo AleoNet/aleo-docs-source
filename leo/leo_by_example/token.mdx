@@ -45,7 +45,7 @@ private_key: APrivateKey1zkpFo72g7N9iFt3JzzeG8CqsS5doAiXyFvNCgk2oHvjRCzF
 address: aleo17vy26rpdhqx4598y5gp7nvaa9rk7tnvl6ufhvvf4calsrrqdaqyshdsf5z
 ```
 
-## <a id="step0"></a> Public Mint
+## Public Mint {#step0}
 
 Let's play Alice. Swap in her private key and publicly mint 100 tokens.
 
@@ -73,7 +73,7 @@ Output
 
 You can see the output of `mint_public`, which takes the arguments Alice's address and the amount of tokens to mint publicly. This information is shown onchain and can be queried on a network.
 
-## <a id="step1"></a> Private Mint
+## Private Mint {#step1}
 
 Now let's privately mint 100 tokens for Bob. Switch to Bob's private key and privately mint 100 tokens for Bob.
 
@@ -98,7 +98,7 @@ Output
 
 The output is a private record.
 
-## <a id="step2"></a> Public Transfer
+## Public Transfer {#step2}
 
 Let's publicly transfer 10 tokens from Alice to Bob. Swap the private key back to Alice and call the public transfer function.
 
@@ -127,7 +127,7 @@ Output
 
 Again, we see the arguments used for the `final` block of `transfer_public` - Alice's address, Bob's address, and the amount to transfer. The public mapping will be queryable onchain.
 
-## <a id="step3"></a> Private Transfer
+## Private Transfer {#step3}
 
 Let's privately transfer 20 tokens from Bob to Alice. Switch to Bob's private key and call the private transfer function.
 
@@ -161,7 +161,7 @@ Output
 
 The output of `transfer_private` is a record owned by Bob less the 20 tokens he privately transferred to Alice, and a record owned by Alice with the 20 tokens Bob transferred to Alice.
 
-## <a id="step4"></a> Public to Private Transfer
+## Public to Private Transfer {#step4}
 
 Let's convert 30 of Alice's public tokens into 30 private tokens for Bob. Switch the private key back to Alice.
 
@@ -194,7 +194,7 @@ Output
 
 Calling `transfer_public_to_private` outputs finalization data, which indicates code to be run onchain, along with its associated inputs.
 
-## <a id="step5"></a> Private to Public Transfer
+## Private to Public Transfer {#step5}
 
 Let's convert 40 of Bob's private tokens into 40 public tokens for Alice. Switch the private key back to Bob.
 
