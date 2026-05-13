@@ -1,8 +1,232 @@
 ---
+id: record_autojoin
 title: Record Autojoin
 sidebar_label: Record Autojoin
 sidebar_position: 4
-description: Automatically joining records on Aleo.
+description: Strategies for consolidating fragmented records on Aleo.
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 # Record Autojoin
+
+Aleo's private balances are stored as **records** — encrypted UTXOs that only the owner can decrypt. A wallet's private balance is the sum of the records it holds. Routine activity (sending, receiving, paying fees) accumulates many small records over time, a condition known as **record fragmentation**.
+
+Fragmentation is a UX problem. Each Aleo transaction can consume at most 16 record inputs, so a wallet with a large total balance scattered across many small records may still be unable to send that balance in a single transaction. The protocol can't aggregate records on the user's behalf — records are private and only spendable by the owner — so consolidation is the application layer's job.
+
+![Fragmented vs. consolidated wallet: many small records become one](/img/autojoin/01-fragmentation.svg)
+
+A canonical reference implementation is available at [AleoNet/example-autojoin](https://github.com/AleoNet/example-autojoin). It packages two pluggable strategies, fee planning under private-fee mode, and an SDK wrapper for fetching unspent records. The rest of this page describes the patterns common to record consolidation on Aleo, using that repo as the worked example.
+
+## The `Join` Primitive
+
+Every officially recognized token program on the network defines a `join` transition that consumes two existing records and produces one output record whose amount equals their sum. Repeated applications of `join` reduce any number of records to a single record.
+## Pairwise Reduction
+
+The simplest strategy: group records into pairs, join each pair, then repeat on the outputs until one record remains.
+
+<img src="/img/autojoin/02a-pairwise.svg" alt="Pairwise joins" style={{maxWidth: '640px', margin: '1.5rem auto'}} />
+
+```typescript
+const pairs: [AleoRecord, AleoRecord][] = [];
+for (let i = 0; i + 1 < current.length; i += 2) {
+  pairs.push([current[i], current[i + 1]]);
+}
+
+const joinedRecords = await Promise.all(pairs.map(async ([a, b]) => {
+  const { transactionId, newRecord } = await this.join2(a, b);
+  await this.aleoClient.waitForTransactionConfirmation(transactionId);
+  return newRecord;
+}));
+```
+
+Each round can dispatch all pair joins concurrently, so the wall-clock duration of a round is roughly the duration of a single transaction. Pairwise reduction requires `N − 1` join transactions to consolidate `N` records — transaction count is linear in `N`, total wall-clock time is logarithmic ( $$log_2$$ ) in `N`.
+
+The advantage of pairwise reduction is that it works with **any** token whose program exposes the standard `join` transition. No additional onchain programs are required.
+
+## Batch Reduction
+
+For larger record sets, pairwise reduction becomes time-inefficient. Custom wrapper programs expose a family of higher-arity transitions — `join_2` through `join_16` — that consume up to 16 records (snarkVM's per-transaction input cap) and produce one record in a single transition.
+
+```leo
+import credits.aleo;
+
+program batch_join_credits.aleo {
+    fn join_3(
+        token_1: credits.aleo::credits,
+        token_2: credits.aleo::credits,
+        token_3: credits.aleo::credits,
+    ) -> credits.aleo::credits {
+        let i1 = credits.aleo::join(token_1, token_2);
+        let output = credits.aleo::join(token_3, i1);
+        return output;
+    }
+
+    fn join_4(
+        token_1: credits.aleo::credits,
+        token_2: credits.aleo::credits,
+        token_3: credits.aleo::credits,
+        token_4: credits.aleo::credits,
+    ) -> credits.aleo::credits {
+        let i1 = credits.aleo::join(token_1, token_2);
+        let i2 = credits.aleo::join(token_3, token_4);
+        let output = credits.aleo::join(i1, i2);
+        return output;
+    }
+
+    // join_5 ... join_16
+}
+```
+
+A `join_N` call net-removes `N − 1` records per transaction. With `join_16`, a consolidation of 100 records that would require 99 pairwise transactions completes in 7 batch transactions distributed over two rounds. For typical user wallets, the batch strategy terminates in one or two rounds.
+
+<img src="/img/autojoin/02b-batch.svg" alt="Batch joins" style={{maxWidth: '640px', margin: '1.5rem auto'}} />
+
+The driver loop partitions inputs into batches of up to 16, dispatches them concurrently, then recurses on the outputs:
+
+```typescript
+while (current.length > 1) {
+  const batches: AleoRecord[][] = [];
+  while (current.length > 0) {
+    batches.push(current.splice(0, Math.min(current.length, 16)));
+  }
+
+  const joinedRecords = await Promise.all(batches.map(async (batch) => {
+    const { transactionId, newRecord } = await this.joinN(batch);
+    await this.aleoClient.waitForTransactionConfirmation(transactionId);
+    return newRecord;
+  }));
+
+  current = joinedRecords;
+}
+```
+
+The cost is the wrapper program itself — batch joins only work for tokens that have a deployed batch wrapper. `credits.aleo`, USDCx, and USAD have wrappers today. A generic dynamic-dispatch batch wrapper is expected later in 2026.
+
+| | Pairwise | Batch |
+|---|---|---|
+| Works with any `join` token | Yes | No — requires a batch wrapper |
+| Records per transaction | 2 | 2–16 |
+| Rounds to consolidate `N` records | `⌈log₂ N⌉` | `⌈log₁₆ N⌉` |
+| Per-transaction fee | Lowest (bare `join`) | Higher per call, fewer calls |
+
+## Intermediate State and Retries
+
+After a join is broadcast, its output record is needed as input to the next round. Re-scanning the chain between rounds would round-trip through a record scanning service; instead, the strategy decrypts the output ciphertext from the broadcast response and forwards the resulting record in memory.
+
+Some transactions in the next round may initially be rejected if the broadcast node hasn't observed the prior transaction as finalized yet. Bounded exponential backoff handles this:
+
+```typescript
+async submitProvingRequestwithRetries(provingRequest, retries, attempts = 0) {
+  try {
+    return await this.submitProvingRequest(provingRequest);
+  } catch (e) {
+    if (retries <= 0) throw e;
+    await sleep(5000 * (attempts + 1));
+    return this.submitProvingRequestwithRetries(provingRequest, retries - 1, attempts + 1);
+  }
+}
+```
+
+## Private Fees
+
+Aleo transactions can pay their fee either from a public balance or from a private credits record. Private-fee mode keeps the fee payment encrypted alongside the rest of the transaction, but introduces two extra constraints for autojoin.
+
+### Input Cap
+
+The private fee record occupies one of the 16 input slots that would otherwise be available to the function being executed. The largest batch join that fits alongside a private fee is therefore `join_15` — 15 record inputs plus 1 fee record fills all 16 slots.
+
+For consolidating `N` records under private fees, the number of `join_15` calls needed is
+
+$$
+\large \left\lfloor \frac{N - 1}{14} \right\rfloor
+$$
+
+followed by a single `join_X` cleanup, where
+
+$$
+\large X = ((N - 1) \bmod 14) + 1
+$$
+
+The divisor is 14, not 15, because each `join_15` invocation consumes 15 records and produces 1 — a net reduction of 14.
+
+### Fee Precision
+
+A private fee record must hold **exactly** the amount needed for the operation it pays for. Underpayment makes the transaction fail at execution time. Overpayment returns a residual record — which itself contributes to fragmentation. Aleo fees are deterministic (set at compile time by the circuit's complexity, no congestion pricing), so the full fee budget can be computed up front.
+
+The fee records are prepared in two splits of an existing credits record: one split carves out a master fee record sized for the total budget, the second split divides that master into per-operation fee records sized for each individual join.
+
+![Private fee preparation pipeline: split a credits record into a master fee record, then split that into per-operation fee records](/img/autojoin/03-private-fee-pipeline.svg)
+
+### Implicit split cost
+
+The `split` operation on `credits.aleo` does **not** incur a normal onchain execution fee. Instead, it has an implicit **10,000 μALEO** cost deducted directly from the record being split. This is fixed by the protocol and is not represented as a separate fee record. A budget that accounts only for join fees, ignoring the splits required to prepare them, will under-fund the operation. Both quantities are deterministic and can be folded into the same up-front calculation.
+
+### Cost table
+
+Base execution fees, in μALEO, for the bare `join` and the batch wrappers across the three deployed wrapper sets:
+
+| Function | Aleo Credits | USDCx | USAD |
+|---|---:|---:|---:|
+| `join`     |  2,120 |  2,123 |  2,122 |
+| `join_2`   |  2,872 |  2,878 |  2,876 |
+| `join_3`   |  3,833 |  3,842 |  3,839 |
+| `join_4`   |  4,794 |  4,806 |  4,802 |
+| `join_5`   |  6,624 |  6,658 |  6,647 |
+| `join_6`   |  9,020 |  9,069 |  9,053 |
+| `join_7`   | 11,787 | 11,851 | 11,830 |
+| `join_8`   | 14,923 | 15,006 | 14,978 |
+| `join_9`   | 18,428 | 18,531 | 18,497 |
+| `join_10`  | 22,306 | 22,433 | 22,391 |
+| `join_11`  | 26,555 | 26,708 | 26,657 |
+| `join_12`  | 31,170 | 31,350 | 31,290 |
+| `join_13`  | 36,153 | 36,363 | 36,293 |
+| `join_14`  | 41,506 | 41,748 | 41,668 |
+| `join_15`  | 47,228 | 47,505 | 47,413 |
+| `join_16`  | 53,320 | 53,634 | 53,529 |
+
+- The bare `join` is cheaper than the wrapper `join_2` because the wrapper adds a transition hop. If you only need to join two records, call `join` directly.
+- USDCx and USAD wrappers are slightly more expensive than `credits.aleo` at every batch size — the token side carries extra import overhead (multisig core, freezelist, Merkle tree) that shows up in proof cost.
+- These are base fees only. They don't include priority fees or the 10,000 μALEO buffer the reference implementation adds when carving private fee records.
+
+## Library Usage
+
+The reference implementation exposes two main classes:
+
+- **`AleoClient`** — wraps the Provable SDK: network init, JWT auth, record scanning, delegated proving.
+- **`AutoJoinClient`** — orchestrates the consolidation using a pluggable `JoinStrategy`.
+
+Two strategies ship out of the box: `BasicAutoJoinStrategy` (pairwise) and `BatchAutoJoinStrategy` (uses the deployed batch wrappers). Both implement a small interface that any custom strategy can extend:
+
+```typescript
+interface JoinStrategy {
+  isSupportedProgram(programName: string): boolean;
+  joinRecords(records: AleoRecord[]): Promise<AleoRecord>;
+}
+```
+
+End-to-end usage:
+
+```typescript
+import { AleoClient } from './src/aleo/aleoClient';
+import { AutoJoinClient } from './src/aleo/autojoin/autoJoinClient';
+import { BasicAutoJoinStrategy } from './src/aleo/autojoin/strategies/basicAutoJoinStrategy';
+
+const aleoClient = new AleoClient('testnet', {
+  apiKey: 'YOUR_API_KEY',
+  consumerId: 'YOUR_CONSUMER_ID',
+});
+await aleoClient.initNetwork();
+
+const account = aleoClient.accountFromPrivateKey('APrivateKey1zkp...');
+await aleoClient.registerAccountForRecordScanning(account);
+
+const records = await aleoClient.fetchUnspentRecords(account, ['credits.aleo']);
+
+const autoJoinClient = new AutoJoinClient(aleoClient, account, BasicAutoJoinStrategy);
+const joinedRecord = await autoJoinClient.joinRecords(records);
+```
+
+`joinRecords` validates that all input records share the same program, are owned by the same address, are supported by the strategy, and each have a `transactionId`. It throws a descriptive error if any condition fails or onchain confirmation times out.
+
+Swap `BasicAutoJoinStrategy` for `BatchAutoJoinStrategy` to use the deployed wrappers instead — the rest of the API is identical.

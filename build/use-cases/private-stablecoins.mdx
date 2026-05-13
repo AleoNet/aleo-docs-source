@@ -64,9 +64,7 @@ Every operation that crosses the public/private boundary (`mint_private`, `burn_
 
 ### Multisig-based Admin
 
-Admin operations are gated by an onchain multisig program, which requires multiple signers — identified by both Aleo addresses and ECDSA keys — to authorize sensitive changes such as role updates and program initialization.
-
-The underlying pattern — an Aleo smart contract wallet authorized by ECDSA signatures — is demonstrated in the [`virtual_wallet` Leo example](https://github.com/ProvableHQ/leo-examples/tree/main/virtual_wallet). This example is particularly useful for **custodians** who need to manage onchain assets using existing ECDSA key infrastructure (HSMs, existing Ethereum signing keys) without exposing a native Aleo private key as the authority. It shows how to deploy a program that accepts secp256k1 ECDSA signatures as its authorization mechanism, using an ephemeral Aleo key for transaction signing while ECDSA keys retain spending authority.
+Admin operations are gated by an onchain multisig program, which requires multiple signers — identified by both Aleo addresses and ECDSA keys — to authorize sensitive changes such as role updates and program initialization. See [Multisig](/build/use-cases/multisig) for the full design.
 
 
 {/* 
@@ -267,7 +265,7 @@ Initializes the stablecoin program with its token metadata and sets the initial 
 | `max_supply` | `public u128` | Maximum allowed supply |
 | `admin` | `public address` | Initial admin address |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -289,7 +287,7 @@ Assigns a new role bitmask to a target address. The caller must have `ADMIN_ROLE
 | `account` | `public address` | Address to update |
 | `role` | `private u16` | New role bitmask to assign |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -311,7 +309,7 @@ Utility function that computes the signing operation ID for a program deployment
 | `checksum` | `private [u8; 32]` | Deployment checksum |
 | `edition` | `private u16` | Deployment edition |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -331,7 +329,7 @@ Proves that the transaction signer is not on the freeze list by verifying two ad
 |---|---|---|
 | `proofs` | `private [MerkleProof; 2]` | Two adjacent proofs bounding the signer's address in the freeze list tree |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -353,7 +351,7 @@ Mints tokens to a public balance. Requires `MINTER_ROLE` or `ADMIN_ROLE`. The pr
 | `recipient` | `public address` | Recipient address |
 | `amount` | `public u128` | Number of tokens to mint |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -375,7 +373,7 @@ Mints tokens to a private `Token` record. Requires `MINTER_ROLE` or `ADMIN_ROLE`
 | `recipient` | `private address` | Recipient address (not visible onchain) |
 | `amount` | `public u128` | Number of tokens to mint |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -397,7 +395,7 @@ Burns tokens from a public balance. Requires `BURNER_ROLE` or `ADMIN_ROLE`. The 
 | `owner` | `public address` | Address whose tokens are burned |
 | `amount` | `public u128` | Number of tokens to burn |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -419,7 +417,7 @@ Burns tokens from a private `Token` record. Requires `BURNER_ROLE` or `ADMIN_ROL
 | `input_record` | `Token` | Token record to burn from |
 | `amount` | `public u128` | Number of tokens to burn |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -441,7 +439,7 @@ Transfers tokens between public balances. Caller is `self.caller`. Both sender a
 | `recipient` | `public address` | Recipient address |
 | `amount` | `public u128` | Amount to transfer |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -463,7 +461,7 @@ Same as `transfer_public`, but uses `self.signer` as the sender — useful insid
 | `recipient` | `public address` | Recipient address |
 | `amount` | `public u128` | Amount to transfer |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -489,7 +487,7 @@ Transfers tokens between two private `Token` records. The sender must provide tw
 | `input_record` | `Token` | Sender's token record |
 | `proofs` | `private [MerkleProof; 2]` | Merkle proofs certifying sender is not on the freeze list |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -511,7 +509,7 @@ Converts a public balance to a private `Token` record. Emits a `ComplianceRecord
 | `recipient` | `private address` | Private recipient address (not visible onchain) |
 | `amount` | `public u128` | Amount to convert |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -535,7 +533,7 @@ Converts a private `Token` record to a public balance.
 | `amount` | `public u128` | Amount to convert |
 | `input_record` | `Token` | Sender's private token record |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -557,7 +555,7 @@ Grants a spender the ability to transfer tokens on behalf of the caller, increas
 | `spender` | `public address` | Address to authorize |
 | `amount` | `public u128` | Amount to add to the allowance |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -579,7 +577,7 @@ Reduces or revokes a spender's allowance.
 | `spender` | `public address` | Address to de-authorize |
 | `amount` | `public u128` | Amount to subtract from the allowance |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -603,7 +601,7 @@ Transfers tokens from an owner to a recipient using a pre-approved allowance. Ow
 | `recipient` | `public address` | Address to credit |
 | `amount` | `public u128` | Amount to transfer |
 
-[Back to Top](#functions)
+
 
 ---
 
@@ -627,4 +625,4 @@ Converts a public balance to a private `Token` record on behalf of the owner, us
 | `recipient` | `private address` | Private recipient address (not visible onchain) |
 | `amount` | `public u128` | Amount to convert |
 
-[Back to Top](#functions)
+

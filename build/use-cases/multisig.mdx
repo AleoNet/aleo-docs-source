@@ -1,8 +1,378 @@
 ---
+id: multisig
 title: Multisig
 sidebar_label: Multisig
 sidebar_position: 2
-description: Building a multisig solution on Aleo.
+description: A modular multi-signature system for Aleo programs.
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 # Multisig
+
+A multisig (multi-signature) scheme gates an onchain operation behind approval from `k` of `n` authorized signers. On Aleo, this pattern is commonly built as a reusable engine — a single program that manages an arbitrary number of independently configured wallets, each with its own threshold and signer set. Other programs delegate their admin operations to the engine by treating their own program address as a `wallet_id`, binding the signer set to the program itself.
+
+A canonical Leo reference implementation is available at [AleoNet/aleo-multisig](https://github.com/AleoNet/aleo-multisig). It supports signers identified by either **Aleo addresses** or **secp256k1 (ECDSA) addresses**, the latter useful for custodians and bridge operators that already manage Ethereum-style keys. 
+
+The same engine is used in production by:
+- The USDCx and USAD [private stablecoin programs](/build/use-cases/private_stablecoins), for sensitive admin operations
+- The Hyperlane bridge programs
+- The USDCx bridge
+
+## How It Works
+
+A multisig "wallet" is identified by a `wallet_id` of type `address`. This makes it trivial for other Aleo programs to gate their own admin operations behind the multisig — they just use `self.address` as the `wallet_id`, binding the signer set to the program itself.
+
+Each wallet has:
+- A **threshold** — number of signatures required to confirm an operation
+- A **signer set** — up to 4 Aleo signers and up to 4 ECDSA signers
+- An **admin path** — the same signers can vote to change the threshold, add/remove signers, etc.
+
+### The Three-Phase Flow
+
+Every multisig operation follows the same three phases:
+
+1. **Initiate.** Anyone calls `initiate_signing_op` (or a domain-specific variant like `init_public_transfer` in `multisig_wallet.aleo`) with a `signing_op_id` and a `block_expiration` height. The `signing_op_id` is a `field` chosen by the caller — typically a hash of the operation's parameters so it's uniquely tied to the intended action. If the caller is themselves an authorized signer, this counts as the first signature.
+2. **Sign.** Authorized signers call `sign` (Aleo signers) or `sign_ecdsa` (ECDSA signers) on `multisig_core.aleo` with the `wallet_id` and `signing_op_id`. ECDSA signatures additionally carry a `nonce` to prevent replay; the signature is over `hash(wallet_id, signing_op_id, nonce)`. All signatures must arrive before `start_height + block_expiration`.
+3. **Execute.** Once the threshold is met, anyone calls the matching `exec_*` function. The execute transition verifies the signature count against the **current** threshold (not the threshold at initiate time) and runs the gated operation.
+
+If a signing operation expires without executing, its `signing_op_id` can be reused to start over. Active or already-executed ids cannot be reused.
+
+
+### ECDSA Signers and Virtual Wallets
+
+ECDSA signer support exists primarily to serve **custodians** who already manage spending authority via secp256k1 keys (HSMs, existing Ethereum signing infrastructure) and want to extend that authority onchain without provisioning native Aleo private keys. The signature is verified onchain using Aleo Instructions' [ECDSA opcodes](/build/aleo-instructions/reference/cryptographic-operations#ecdsa-verification); a transaction-level Aleo signature is still required to broadcast, but it can come from an ephemeral key with no spending authority of its own.
+
+The same underlying pattern is demonstrated standalone in the [`virtual_wallet` Leo example](https://github.com/ProvableHQ/leo-examples/tree/main/virtual_wallet): a smart-contract wallet whose only authority check is ECDSA signature verification. It's a useful starting point for custodians building bespoke flows that don't need the full multisig surface.
+
+
+## Wallet Creation Modes
+
+`multisig_core.aleo` is initialized once via the `init` transition (only callable by the hardcoded `DEPLOYER_ADDRESS`). The `init` call sets the wallet creation mode for the whole deployment:
+
+- **Open** — anyone can call `create_wallet`.
+- **Guarded** — creating a new wallet first requires a completed multisig operation on the deployment's "guard wallet".  The guard wallet's signers must approve before `create_wallet` succeeds.
+
+## Privacy
+
+This implementation does **not** hide signer identities — signer addresses appear in mappings and are publicly visible. The tradeoff was made for code simplicity, ease of use, and supporting an unlimited number of signers without record-keyed signing privileges. If signer privacy matters more than these properties, an offchain MPC-based solution will be needed.
+
+## Upgradability
+
+`multisig_core.aleo` has built-in upgrade controls:
+
+| Role | Address source | Capabilities |
+|---|---|---|
+| **Deployer** | Hardcoded `DEPLOYER_ADDRESS` const | Deploys the initial program edition; calls `init`. Must be changed before deployment. |
+| **Upgrader** | Set via `init`; mutable via `set_upgrader_address` | Deploys future editions; can call `disallow_upgrades`. |
+
+The program ships with an **upgrade kill switch**: `init` sets `allow_upgrades = true`, but the upgrader can permanently freeze the program by calling `disallow_upgrades`. Once flipped to `false`, the `constructor` rejects all future deployments — irreversibly.
+
+## Programs in the System
+
+The repository contains three deployable programs:
+
+| Program | Role |
+|---|---|
+| `multisig_core.aleo` | The reusable engine. Manages wallets, signing operations, and admin ops. |
+| `multisig_wallet.aleo` | Example consumer — a multisig-controlled wallet that holds Aleo credits and `token_registry.aleo` tokens with public *and* private transfers. |
+| `test_upgrades.aleo` | Example consumer — demonstrates gating program upgrades behind a multisig operation (used as the model for stablecoin admin upgrades). |
+
+
+
+## Data Structures
+
+### `WalletSettings`
+
+Per-wallet configuration: threshold and signer arrays (Aleo + ECDSA, 4 of each).
+
+### `WalletSigningOp`
+
+The state of an in-flight signing operation: signer-presence bits, round counter, expiration height.
+
+### `AdminOp`
+
+A proposed administrative change to a wallet — new threshold, new signer arrays. Hashed to produce the `signing_op_id` of an admin operation.
+
+### `GuardedCreateWalletOp`
+
+```leo
+struct GuardedCreateWalletOp {
+    wallet_id: address,
+    threshold: u8,
+    aleo_signers: [address; 4],
+    ecdsa_signers: [[u8; 20]; 4],
+}
+```
+
+Proposed parameters for a new wallet under guarded creation. Hashed to produce the guard-wallet `signing_op_id` that must be approved before `create_wallet` will succeed.
+
+### `ProgramSettings`
+
+Deployment-wide settings: upgrade kill switch (`allow_upgrades`), `upgrader_address`, and `guard_create_wallet` flag.
+
+## Functions
+
+### `init`
+
+```leo
+final fn init(
+    upgrader_address: address,
+    guard_create_wallet: bool,
+) -> Future
+```
+
+One-time setup. Callable only by `DEPLOYER_ADDRESS`. Sets the upgrader address and the wallet-creation mode.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `upgrader_address` | `address` | Address allowed to deploy future editions and call `disallow_upgrades`. |
+| `guard_create_wallet` | `bool` | `false` for open wallet creation, `true` for guarded creation via the guard wallet. |
+
+
+
+---
+
+### `set_upgrader_address`
+
+```leo
+final fn set_upgrader_address(
+    new_upgrader_address: address,
+) -> Future
+```
+
+Rotates the upgrader. Callable only by the current upgrader.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `new_upgrader_address` | `address` | New address allowed to deploy future editions. |
+
+
+
+---
+
+### `disallow_upgrades`
+
+```leo
+final fn disallow_upgrades() -> Future
+```
+
+Permanently disables future program upgrades. Callable only by the upgrader. **Irreversible.**
+
+
+
+---
+
+### `create_wallet`
+
+```leo
+final fn create_wallet(
+    public wallet_id: address,
+    public threshold: u8,
+    public aleo_signers: [address; 4],
+    public ecdsa_signers: [[u8; 20]; 4],
+) -> Future
+```
+
+Creates a new multisig wallet under `wallet_id` with the given threshold and signer set. Unused signer slots are filled with the zero address. In guarded mode, the corresponding `GuardedCreateWalletOp` must have been approved by the guard wallet first.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `wallet_id` | `public address` | Unique identifier for the wallet (often `self.address` of a consuming program). |
+| `threshold` | `public u8` | Number of signatures required (must be ≤ number of non-zero signers). |
+| `aleo_signers` | `public [address; 4]` | Aleo signer addresses; unused slots = zero address. |
+| `ecdsa_signers` | `public [[u8; 20]; 4]` | ECDSA signer addresses (20-byte Ethereum-style); unused slots = zeros. |
+
+
+
+---
+
+### `initiate_signing_op`
+
+```leo
+final fn initiate_signing_op(
+    public wallet_id: address,
+    public signing_op_id: field,
+    public block_expiration: u32,
+) -> (field, Future)
+```
+
+Phase 1 of any multisig operation. Records a new signing operation under `(wallet_id, signing_op_id)` with an expiration height of `current_block + block_expiration`. Anyone may call this; if the caller is a signer, it counts as the first signature.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `wallet_id` | `public address` | Wallet under which the operation is being initiated. |
+| `signing_op_id` | `public field` | Unique operation ID; typically a hash of the parameters being gated. |
+| `block_expiration` | `public u32` | Number of blocks the operation remains open for signing. |
+
+
+
+---
+
+### `sign`
+
+```leo
+final fn sign(
+    public wallet_id: address,
+    public signing_op_id: field,
+) -> Future
+```
+
+Phase 2 for an Aleo signer. Adds the caller's signature to the pending operation. Must be called before `start_height + block_expiration`.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `wallet_id` | `public address` | Wallet under which the operation was initiated. |
+| `signing_op_id` | `public field` | The pending operation's ID. |
+
+
+
+---
+
+### `sign_for_round`
+
+```leo
+final fn sign_for_round(
+    public wallet_id: address,
+    public signing_op_id: field,
+    public round: u32,
+) -> Future
+```
+
+Same as `sign`, but scoped to a specific signing round — used when a single operation is signed in multiple atomic batches.
+
+
+
+---
+
+### `sign_ecdsa`
+
+```leo
+final fn sign_ecdsa(
+    public wallet_id: address,
+    public signing_op_id: field,
+    public ecdsa_signer: [u8; 20],
+    public sig: [u8; 65],
+    public nonce: u64,
+) -> Future
+```
+
+Phase 2 for an ECDSA signer. The signature must be over `hash(wallet_id, signing_op_id, nonce)`. The `nonce` prevents signature replay across operations.
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `wallet_id` | `public address` | Wallet under which the operation was initiated. |
+| `signing_op_id` | `public field` | The pending operation's ID. |
+| `ecdsa_signer` | `public [u8; 20]` | The signer's Ethereum-style 20-byte address. |
+| `sig` | `public [u8; 65]` | 65-byte secp256k1 signature over the canonical hash. |
+| `nonce` | `public u64` | Replay-protection nonce. |
+
+
+
+---
+
+### `sign_ecdsa_for_round`
+
+```leo
+final fn sign_ecdsa_for_round(
+    public wallet_id: address,
+    public signing_op_id: field,
+    public ecdsa_signer: [u8; 20],
+    public sig: [u8; 65],
+    public nonce: u64,
+    public round: u32,
+) -> Future
+```
+
+Round-scoped variant of `sign_ecdsa`.
+
+
+
+---
+
+### `init_admin_op`
+
+```leo
+final fn init_admin_op(
+    public wallet_id: address,
+    public signing_op_id: field,
+    public block_expiration: u32,
+    admin_op: AdminOp,
+) -> (field, Future)
+```
+
+Phase 1 specifically for administrative operations on a wallet (changing the threshold, adding or removing signers). Stores the proposed `AdminOp` so it can be re-verified on execute.
+
+
+
+---
+
+### `exec_admin_op`
+
+```leo
+final fn exec_admin_op(
+    public wallet_id: address,
+    public signing_op_id: field,
+    admin_op: AdminOp,
+) -> Future
+```
+
+Phase 3 for admin operations. Once enough signatures are gathered, applies the threshold or signer-set change.
+
+
+
+---
+
+### `assert_signing_completed`
+
+```leo
+final fn assert_signing_completed(
+    public wallet_id: address,
+    public signing_op_id: field,
+) -> Future
+```
+
+Helper used by **other consuming programs**. Asserts that a `(wallet_id, signing_op_id)` operation has met its threshold. Lets a downstream program's own `exec_*` transition gate its logic without re-implementing the signature-counting logic.
+
+
+
+---
+
+### `get_signing_op_id_hash`
+
+```leo
+fn get_signing_op_id_hash(
+    public wallet_id: address,
+    public signing_op_id: field,
+) -> field
+```
+
+Pure utility — returns the canonical hash used in storage and ECDSA signing.
+
+
+
+---
+
+### `guarded_create_wallet_op_hash`
+
+```leo
+fn guarded_create_wallet_op_hash(
+    /* ...GuardedCreateWalletOp fields... */
+) -> field
+```
+
+Pure utility — returns the `signing_op_id` to use in guarded-mode wallet creation. A JS port lives at [`utils/hash_guarded_create_wallet_op.js`](https://github.com/AleoNet/aleo-multisig/blob/main/utils/hash_guarded_create_wallet_op.js) so off-chain tooling can produce the same value.
+
+
