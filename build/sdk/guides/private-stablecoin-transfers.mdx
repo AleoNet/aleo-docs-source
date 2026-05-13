@@ -5,7 +5,6 @@ sidebar_label: Private Stablecoin Transfers
 sidebar_position: 11
 ---
 
-## Background
 
 Aleo supports two stablecoins backed by blue-chip asset issuers: [**USAD** and **USDCx**](../../common-uses/private-stablecoins.mdx). The main features distinguishing these stablecoins from other assets on Aleo are:
 
@@ -27,7 +26,7 @@ Provable provides API endpoints for querying the Merkle root:
 For `transfer_public` and `transfer_public_to_private`, accounts hold assets in a public state and therefore generating the exclusion proof isn't necessary. The freeze list check can reference the public mapping containing the list of frozen addresses to check non-inclusion.
 :::
 
-## Transfer Function Interfaces
+## Private Transfer Functions
 
 ```leo
 transfer_private(
