@@ -12,11 +12,14 @@ toc_max_heading_level: 2
 
 Aleo's private balances are stored as **records** — encrypted UTXOs that only the owner can decrypt. A wallet's private balance is the sum of the records it holds. Routine activity (sending, receiving, paying fees) accumulates many small records over time, a condition known as **record fragmentation**.
 
-Fragmentation is a UX problem. Each Aleo transaction can consume at most 16 record inputs, so a wallet with a large total balance scattered across many small records may still be unable to send that balance in a single transaction. The protocol can't aggregate records on the user's behalf — records are private and only spendable by the owner — so consolidation is the application layer's job.
-
 ![Fragmented vs. consolidated wallet: many small records become one](/img/autojoin/01-fragmentation.svg)
 
-A canonical reference implementation is available at [AleoNet/example-autojoin](https://github.com/AleoNet/example-autojoin). It packages two pluggable strategies, fee planning under private-fee mode, and an SDK wrapper for fetching unspent records. The rest of this page describes the patterns common to record consolidation on Aleo, using that repo as the worked example.
+A fragmented wallet may hold enough total balance to cover a given payment and still be unable to send that payment in a single transaction. The payment could be broken into several smaller transactions, but then each smaller payment would incur its own fee.
+
+Because records are private and only spendable by their owner, the protocol cannot automatically aggregate them on the user's behalf. Therefore, wallet providers who wish to integrate Aleo must handle this record management and consolidation at the application layer.
+
+
+A canonical reference implementation is available at [AleoNet/example-autojoin](https://github.com/AleoNet/example-autojoin). 
 
 ## The `Join` Primitive
 
@@ -25,7 +28,7 @@ Every officially recognized token program on the network defines a `join` transi
 
 The simplest strategy: group records into pairs, join each pair, then repeat on the outputs until one record remains.
 
-<img src="/img/autojoin/02a-pairwise.svg" alt="Pairwise joins" style={{maxWidth: '640px', margin: '1.5rem auto'}} />
+<img src="/img/autojoin/02a-pairwise.svg" alt="Pairwise joins" style={{display: 'block', maxWidth: '640px', margin: '1.5rem auto'}} />
 
 ```typescript
 const pairs: [AleoRecord, AleoRecord][] = [];
@@ -40,7 +43,7 @@ const joinedRecords = await Promise.all(pairs.map(async ([a, b]) => {
 }));
 ```
 
-Each round can dispatch all pair joins concurrently, so the wall-clock duration of a round is roughly the duration of a single transaction. Pairwise reduction requires `N − 1` join transactions to consolidate `N` records — transaction count is linear in `N`, total wall-clock time is logarithmic ( $$log_2$$ ) in `N`.
+Each round can dispatch all pair joins concurrently, so the wall-clock duration of a round is roughly the duration of a single transaction. Pairwise reduction requires `N − 1` `join` transactions to consolidate `N` records — transaction count is linear in `N`, total wall-clock time is logarithmic ( $$log_2$$ ) in `N`.
 
 The advantage of pairwise reduction is that it works with **any** token whose program exposes the standard `join` transition. No additional onchain programs are required.
 
@@ -80,7 +83,7 @@ program batch_join_credits.aleo {
 
 A `join_N` call net-removes `N − 1` records per transaction. With `join_16`, a consolidation of 100 records that would require 99 pairwise transactions completes in 7 batch transactions distributed over two rounds. For typical user wallets, the batch strategy terminates in one or two rounds.
 
-<img src="/img/autojoin/02b-batch.svg" alt="Batch joins" style={{maxWidth: '640px', margin: '1.5rem auto'}} />
+<img src="/img/autojoin/02b-batch.svg" alt="Batch joins" style={{display: 'block', maxWidth: '640px', margin: '1.5rem auto'}} />
 
 The driver loop partitions inputs into batches of up to 16, dispatches them concurrently, then recurses on the outputs:
 
