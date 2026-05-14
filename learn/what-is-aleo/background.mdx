@@ -11,7 +11,7 @@ Before diving into Aleo, it helps to understand the building blocks it's built o
 
 ## Blockchains 101
 
-A blockchain is a shared ledger maintained by a network of computers (called **nodes**) that no single party controls. Instead of trusting a bank or a company to keep records honest, blockchains use cryptography and consensus algorithms to let the network agree on what happened — without needing to trust anyone individually.
+A blockchain is a shared ledger maintained by a network of computers (called **nodes**) that no single party controls. Instead of trusting a bank or a company to keep records honest, blockchains use cryptography and consensus algorithms to let the network agree on what happened without needing to trust anyone individually.
 
 Here's how it works at a high level:
 
@@ -20,21 +20,21 @@ Here's how it works at a high level:
 3. Valid transactions are grouped into a **block** and appended to the chain through a consensus process.
 4. Every node stores a copy of the ledger, making it extremely difficult to alter past records.
 
-**Smart contracts** (or onchain programs) extend this idea beyond simple transfers. They let developers write arbitrary logic — token swaps, lending protocols, voting systems — that runs on the blockchain and is enforced by the network.
+**Smart contracts** (or onchain programs) extend this idea beyond simple transfers. They let developers write arbitrary program logic that runs on the blockchain and is enforced by the network.
 
-The result is a system where anyone can verify what happened, anyone can participate, and no single entity can censor or manipulate the outcome.
+The result is a system where anyone can participate and verify what happened, and no single entity can censor or manipulate the outcome.
 
 ### The Transparency Tradeoff
 
-Most blockchains achieve trust through **total transparency**. Every transaction, every balance, every contract interaction is visible to everyone. This is a powerful property for auditability — but it comes with significant costs, which we'll explore below.
+Most blockchains achieve trust through **total transparency**. Every transaction, every balance, every contract interaction is visible to everyone. This is a powerful property for auditability, but comes with significant costs, which we'll explore below.
 
 ## Zero-Knowledge Proofs 101
 
-A **zero-knowledge proof** (ZKP) is a cryptographic method that lets one party (the **prover**) convince another party (the **verifier**) that a statement is true — without revealing any information beyond the fact that it's true.
+A **zero-knowledge proof** (ZKP) is a cryptographic method that lets one party (the **prover**) convince another party (the **verifier**) that a statement is true without revealing any information beyond the fact that it's true.
 
 ### An Intuitive Example
 
-Imagine you want to prove to a bouncer that you're over 21, but you don't want to show your ID (which also reveals your name, address, and exact birthday). A zero-knowledge proof is like handing the bouncer a sealed, tamper-proof certificate that says "this person is over 21" — and the bouncer can verify it's legitimate without learning anything else about you.
+Imagine you want to prove to a bouncer that you're over 21, but you don't want to show your ID (which also reveals your name, address, and exact birthday). A zero-knowledge proof is like handing the bouncer a sealed, tamper-proof certificate that mathematically guarantees that "this person is over 21" while still letting the bouncer verify that it's legitimate without learning anything else about you.
 
 ### Why This Matters for Blockchains
 
@@ -61,12 +61,12 @@ On most blockchains today, every transaction is permanently visible to anyone. W
 
 This creates real problems:
 
-- **For individuals**: Your entire financial history — salary payments, medical expenses, donations — is publicly visible once your address is linked to your identity.
+- **For individuals**: Your entire financial history is publicly visible once your address is linked to your identity.
 - **For businesses**: Competitors can see your supplier payments, customer volumes, payroll, and treasury movements in real time. Businesses cannot operate with this level of exposure.
-- **For DeFi users**: Visible pending transactions enable **front-running** — where bots detect your trade and execute ahead of you to profit at your expense.
+- **For DeFi users**: Visible pending transactions enable **front-running** where bots detect your trade and execute ahead of you to profit at your expense.
 - **For security**: Public balances and transaction patterns make high-value wallets targets for social engineering and physical threats.
 
-Privacy isn't about hiding wrongdoing. It's the same reason you don't publish your bank statements publicly — even when you have nothing to hide. Financial privacy is a baseline requirement for both individuals and institutions to participate in an economy.
+Privacy isn't about hiding wrongdoing. It's the same reason you don't publish your bank statements publicly even when you have nothing to hide. Financial privacy is a baseline requirement for both individuals and institutions to participate in an economy.
 
 ### Privacy Enables Adoption
 

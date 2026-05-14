@@ -7,7 +7,7 @@ description: A high-level overview of how the Aleo network operates.
 
 # How Aleo Works
 
-Aleo is a Layer-1 blockchain designed for **private, programmable applications**. It uses zero-knowledge proofs to let developers build apps where user data stays private — while the network can still verify that everything is correct.
+Aleo is a Layer-1 blockchain designed for **private, programmable applications**. It uses zero-knowledge proofs to let developers build apps where user data stays private, while still allowing the rest of the network to verify that everything is correct.
 
 The key architectural insight: **execute offchain, verify onchain**.
 
@@ -26,8 +26,8 @@ This model provides privacy (the data never leaves the user's device) and scalab
 
 ## Programmable Privacy
 
-Because execution happens offchain, Aleo programs are **private by default** — inputs, outputs, and program logic are never exposed to the network. But privacy isn't all-or-nothing. Developers can selectively make parts of their program public when transparency is needed.
+Because execution happens offchain, Aleo programs are **private by default**. Inputs, outputs, and program logic are never exposed to the network. But privacy isn't all-or-nothing. Developers can selectively make parts of their program public when transparency is needed.
 
-This means a single program can keep user balances private while publishing a total supply publicly, or verify a credential without revealing the underlying data. The developer decides what to reveal and what to keep encrypted — not the protocol.
+This means a single program can keep user balances private while publishing a total supply publicly, or verify a credential without revealing the underlying data. The developer decides what to reveal and what to keep encrypted, not the protocol.
 
 For a deeper look at how public and private state work in practice, see [Public & Private State](/learn/core-concepts/public-and-private-state).
