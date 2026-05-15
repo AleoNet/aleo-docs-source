@@ -7,6 +7,47 @@ description: Wallets available for the Aleo network.
 
 import WalletEntry from '@site/src/components/WalletEntry';
 
+## Embedded Wallets
+
+Embedded wallets are non-custodial wallets created and managed within your application. Users authenticate with familiar methods (email, social login, passkeys) and a wallet is provisioned automatically — no browser extension or external app required.
+
+<WalletEntry
+  name="Dynamic"
+  url="https://www.dynamic.xyz/"
+  logo="/img/wallets/dynamic.jpeg"
+  badge="Recommended"
+  platforms={[
+    { label: 'Dashboard', url: 'https://app.dynamic.xyz/' },
+  ]}
+  noTopPadding
+  noBorder
+  noBottomPadding
+>
+
+Dynamic provides embedded wallet infrastructure with Aleo support. Their SDK handles social login features, wallet creation, and multi-chain connectivity.
+</WalletEntry>
+
+## Hardware Wallets
+
+Hardware wallets store private keys on a dedicated offline device. Transactions are constructed in a companion app on your computer or phone, then signed by the device — the keys never leave the hardware.
+
+<WalletEntry
+  name="Ledger"
+  url="https://www.ledger.com/"
+  logo="/img/wallets/ledger.webp"
+  badge="Recommended"
+  platforms={[
+    { label: 'Guide', url: 'https://support.ledger.com/article/Aleo-ALEO' },
+  ]}
+  noTopPadding
+  noBorder
+  noBottomPadding
+>
+
+Manage Aleo on a Ledger hardware device through the Ledger Wallet desktop app. The private key stays on the device's Secure Element, and every transaction is physically confirmed on the hardware before being signed via zero-knowledge proof.
+
+</WalletEntry>
+
 ## External Wallets
 
 <WalletEntry
@@ -19,6 +60,7 @@ import WalletEntry from '@site/src/components/WalletEntry';
     { label: 'iOS', url: 'https://apps.apple.com/app/id6757471699' },
     { label: 'Android', url: 'https://play.google.com/store/apps/details?id=com.provable.shieldmobile' },
   ]}
+  noTopPadding
 >
 
 Built by Provable in partnership with the Aleo Network Foundation, Shield is the recommended wallet for interacting with the Aleo ecosystem.
@@ -55,28 +97,10 @@ A self-custodial Aleo wallet with a daily Arcade — onchain casual games with r
     { label: 'iOS', url: 'https://apps.apple.com/us/app/foxwallet-secure-crypto-asset/id1590983231' },
     { label: 'Android', url: 'https://foxwallet.com/download/' },
   ]}
+  noBorder
+  noBottomPadding
 >
 
 A multi-chain wallet supporting 100+ networks including Aleo.
-
-</WalletEntry>
-
-## Embedded Wallets
-
-Embedded wallets are non-custodial wallets created and managed within your application. Users authenticate with familiar methods (email, social login, passkeys) and a wallet is provisioned automatically — no browser extension or external app required.
-
-<WalletEntry
-  name="Dynamic"
-  url="https://www.dynamic.xyz/"
-  logo="/img/wallets/dynamic.jpeg"
-  badge="Recommended"
-  platforms={[
-    { label: 'Browser', url: 'https://app.dynamic.xyz/' },
-  ]}
->
-
-Dynamic provides embedded wallet infrastructure with Aleo support. Their SDK handles authentication, wallet creation, and multi-chain connectivity.
-
-**Features:** Email, social, and passkey authentication. TSS-MPC key management (private key is never assembled in one place). SDKs for React, React Native, Flutter, Swift, Kotlin, and more.
 
 </WalletEntry>
