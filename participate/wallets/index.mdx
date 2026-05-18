@@ -6,10 +6,9 @@ description: Wallets available for the Aleo network.
 ---
 
 import WalletEntry from '@site/src/components/WalletEntry';
+import Tooltip from '@site/src/components/Tooltip';
 
-## Embedded Wallets
-
-Embedded wallets are non-custodial wallets created and managed within your application. Users authenticate with familiar methods (email, social login, passkeys) and a wallet is provisioned automatically — no browser extension or external app required.
+## <Tooltip text="Non-custodial wallets created and managed within your application. Users authenticate with familiar methods (email, social login, passkeys) and a wallet is provisioned automatically — no browser extension or external app required.">Embedded Wallets</Tooltip> {#embedded-wallets}
 
 <WalletEntry
   name="Dynamic"
@@ -27,9 +26,7 @@ Embedded wallets are non-custodial wallets created and managed within your appli
 Dynamic provides embedded wallet infrastructure with Aleo support. Their SDK handles social login features, wallet creation, and multi-chain connectivity.
 </WalletEntry>
 
-## Hardware Wallets
-
-Hardware wallets store private keys on a dedicated offline device. Transactions are constructed in a companion app on your computer or phone, then signed by the device — the keys never leave the hardware.
+## <Tooltip text="Wallets that store private keys on a dedicated offline device. Transactions are constructed in a companion app on your computer or phone, then signed by the device — the keys never leave the hardware.">Hardware Wallets</Tooltip> {#hardware-wallets}
 
 <WalletEntry
   name="Ledger"
