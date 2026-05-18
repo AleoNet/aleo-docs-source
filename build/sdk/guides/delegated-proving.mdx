@@ -25,14 +25,13 @@ Generally this works in the following way:
 2. **Submit** it to the delegated prover in **encrypted** form, which is only decrypted within a TEE.
 3. The proving service submits the **transaction** to the blockchain.
 
----
 
 ## Usage Guide
 
 This guide shows how to access the delegated proving service with JS/TS either using the Provable SDK or
 custom TS/JS code.
 
-## Credentials and authentication
+## Credentials and Authentication
 
 The Delegated Proving Service (DPS) is hosted behind the Provable API at https://api.provable.com/v2.
 
@@ -53,7 +52,7 @@ The **network client** uses the host you provide (e.g. `https://api.provable.com
 When using the delegated proving service, users must obtain a Provable API key. They are then able to submit Proving
 requests in encrypted form to the delegated proving service.
 
-### Flow (encrypted proving)
+### Flow (Encrypted Proving)
 
 0. Client must obtain an API key or JWT from the provable API.
 1. Client requests an ephemeral X25519 public key from the prover: `GET {proverBase}/pubkey`.
@@ -90,9 +89,8 @@ Authentication (e.g. JWT in `Authorization`, cookies for session) is required fo
 to forward the `set-cookie` header from the `/pubkey` response to the `/prove/encrypted` request so the prover can 
 associate the two calls.
 
----
 
-### Building a proving request
+### Building a Proving Request
 
 A **proving request** consists of:
 
@@ -110,7 +108,6 @@ So when you call `programManager.provingRequest(options)`, the SDK resolves the 
 resolves the fee record when not using the fee master, then calls the WASM layer to build the authorization and optional 
 fee authorization and wraps them in a `ProvingRequest`. You can then submit that object (or its string form) to the prover.
 
----
 
 ### Using the SDK
 
@@ -186,9 +183,8 @@ if (result.ok) {
 }
 ```
 
----
 
-### Using custom JavaScript
+### Using Custom JavaScript
 
 You can build the proving request with the SDK (or another tool) and then submit it with your own HTTP client, using the SDK only for encryption.
 
@@ -328,9 +324,8 @@ async function submitProvingRequestEncrypted(
 
 You can add retries for 500/503 and JWT refresh when the token is expired.
 
----
 
-## Quick reference
+## Quick Reference
 
 | Step | GET | POST | Encrypt (SDK) |
 |------|-----|------|----------------|
@@ -340,9 +335,8 @@ You can add retries for 500/503 and JWT refresh when the token is expired.
 - **One key per request:** Use the `key_id` from the same GET response in the corresponding POST. For retries, fetch a new key from `/pubkey`.
 - **Encryption:** Use the SDK’s `encryptProvingRequest` (from `@provablehq/sdk`); ciphertext is base64. The same wire format can be implemented with libsodium if you do not use the SDK.
 
----
 
-## Best practices
+## Best Practices
 
 1. **Prefer encrypted flow** for production so proving requests are only decrypted inside the service’s secure environment.
 2. **Handle prover errors explicitly:** Use `submitProvingRequestSafe` when you want to branch on status (400 vs 500/503) without try/catch; use `submitProvingRequest` when you want the SDK to throw after retries.

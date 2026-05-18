@@ -38,14 +38,13 @@ Upon registration of an Aleo account, the record scanner identifies all records 
 provides the owner of that account with all records they currently own allowing them to keep track of things like
 private balances.
 
----
 
 ## Usage Guide
 
 This guide shows how to access the record scanning service with JS/TS either using the Provable SDK or
 custom TS/JS code.
 
-## Credentials and authentication
+## Credentials and Authentication
 
 The Record Scanning Service (RSS) is hosted at `https://api.provable.com/scanner/{network}` (e.g. `https://api.provable.com/scanner/mainnet` or `https://api.provable.com/scanner/testnet`).
 
@@ -62,7 +61,7 @@ The SDK appends the network (`mainnet` or `testnet`) to the scanner base URL you
 * Mainnet: `https://api.provable.com/scanner/mainnet`
 * Testnet: `https://api.provable.com/scanner/testnet`
 
-## Flow (encrypted registration)
+## Flow (Encrypted Registration)
 
 When using the record scanning service, users must first register their encrypted view key to the record scanner TEE via
 the following flow.
@@ -103,7 +102,6 @@ The following key routes are available on the record scanner.
 
 If the scanner returns **422** on `/records/owned`, the UUID may no longer be valid; re-register (e.g. via `/register/encrypted`) and retry.
 
----
 
 ### Using the Record Scanner via the Provable SDK
 
@@ -139,9 +137,8 @@ const records = await recordScanner.findRecords({
 });
 ```
 
----
 
-### Using custom JavaScript {#using-custom-javascript-record-scanner}
+### Using Custom JavaScript {#using-custom-javascript-record-scanner}
 
 If you prefer not to use the SDK for HTTP, you can call the same endpoints with `fetch` and use the SDK only for encryption.
 
@@ -272,9 +269,8 @@ You can define `OwnedRecord` to match the scanner response shape, or import it f
 
 [A full implementation of the Record Scanner can be viewed here](https://github.com/ProvableHQ/sdk/blob/mainnet/sdk/src/record-scanner.ts) for usage in one's own SDK.
 
----
 
-## Quick reference
+## Quick Reference
 
 | Step | GET | POST | Encrypt (SDK) |
 |------|-----|------|----------------|
@@ -284,9 +280,8 @@ You can define `OwnedRecord` to match the scanner response shape, or import it f
 - **One key per request:** Use the `key_id` from the same GET response in the corresponding POST. For retries, fetch a new key from `/pubkey`.
 - **Encryption:** Use the SDK's `encryptRegistrationRequest` (from `@provablehq/sdk`); ciphertext is base64. The same wire format can be implemented with libsodium if you do not use the SDK.
 
----
 
-## Best practices
+## Best Practices
 
 1. **Prefer encrypted flow** for production so your view key is only decrypted inside the service's secure environment.
 2. **Register before querying:** Complete registration (encrypted or not) and store the returned `uuid` before calling `/records/owned`. On 422 from `/records/owned`, re-register and retry once.
