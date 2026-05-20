@@ -39,11 +39,10 @@ This is how wallets like [Shield](/participate/wallets) handle record scanning i
 
 Once a wallet has discovered its records, it needs to determine which are still spendable. When a record is consumed in a transition, both a **serial number** and a **tag** are published onchain.
 
-### Serial Number Method (Requires Private Key)
-
+### Serial Number Method
 The wallet computes the serial number for each known record using the account's private key (involving scalar multiplication on the Edwards BLS12 curve) and checks if it exists onchain. This is the definitive method but computationally expensive per record.
 
-### Tag Method (Requires View Key)
+### Tag Method 
 
 A faster alternative using the account's **graph key**. The graph key contains a single value, `sk_tag`, derived from the view key:
 
