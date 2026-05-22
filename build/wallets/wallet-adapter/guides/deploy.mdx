@@ -11,7 +11,7 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 <DemoForm
   action="Deploy"
   fields={[
-    { type: 'textarea', name: 'program', label: 'Program Code', placeholder: 'Paste your program code here...', helperText: 'Paste your complete Aleo program code here' },
+    { type: 'textarea', name: 'program', label: 'Program Code', placeholder: 'program hello.aleo; \n...', helperText: 'Paste your complete Aleo Instructions program code here' },
     { type: 'number', name: 'priorityFee', label: 'Priority Fee', placeholder: 'Priority Fee (in microcredits)', helperText: 'Fee amount in microcredits (1 credit = 1,000,000 microcredits)' },
     { type: 'checkbox', name: 'privateFee', label: 'Pay fee privately' },
   ]}
@@ -26,7 +26,8 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
   }}
 />
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+<CopyCodeBlock>{`
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
 import { AleoDeployment } from '@provablehq/aleo-wallet-standard';
 import React, { useCallback } from 'react';

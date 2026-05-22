@@ -11,7 +11,7 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 <DemoForm
   action="Decrypt"
   fields={[
-    { type: 'textarea', name: 'ciphertext', label: 'Ciphertext', placeholder: 'Record / Cipher text to Decrypt' },
+    { type: 'textarea', name: 'ciphertext', label: 'Ciphertext', placeholder: 'record1qvqs...' },
   ]}
   onSubmit={async (values, wallet) => {
     const decrypted = await wallet.decrypt(String(values.ciphertext));

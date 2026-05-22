@@ -13,15 +13,14 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
   fields={[
     { type: 'text', name: 'programId', label: 'Program ID', placeholder: 'Enter program name' },
     { type: 'checkbox', name: 'includePlaintext', label: 'Include plaintext on each record' },
+    { type: 'checkbox', name: 'unspentOnly', label: 'Only include unspent records' },
   ]}
   onSubmit={async (values, wallet) => {
-    const records = await wallet.requestRecords(String(values.programId), !!values.includePlaintext);
+    const records = await wallet.requestRecords(String(values.programId), !!values.includePlaintext, !!values.unspentOnly ? 'unspent' : undefined);
     return records;
   }}
 >
-  <p style={{ fontSize: '0.8rem', color: 'var(--ifm-color-emphasis-500)', fontStyle: 'italic' }}>
-    Some wallets may not support the plaintext option.
-  </p>
+
 </DemoForm>
 
 <CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
