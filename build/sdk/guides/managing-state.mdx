@@ -42,7 +42,7 @@ finalize transfer_public:
     set r6 into account[r1];
 ```
 
-From the perspective of the caller of the API, this is as simple as executing a normal Aleo function. For more information on how to do this with the SDK, check out the [Executing Programs](./execute-programs.mdx) guide or the [Transferring Credits](./transfer-credits.mdx) guide.
+From the perspective of the caller of the API, this is as simple as executing a normal Aleo function. For more information on how to do this with the SDK, check out the [Executing Programs](./execute-programs.mdx) guide or the [Transferring Credits](./transfers/transfer-credits.mdx) guide.
 
 Given the inputs to a function with a finalize scope that updates a mapping are valid, the mapping will either be intialized or updated
 by the Aleo network.  If function inputs are invalid, the network will return an error, but the fee paid for the transaction will still be
@@ -238,7 +238,7 @@ graph LR
 This function consumes a private `credits` record as input and outputs two new private `credits` records as output (one that sends the credits to the recipient and one that sends the remaining credits to the sender).  Below you'll find what this flow would look like in the SDK:
 
 #### User 1 Sends a Private Value Transfer to User 2
-If you've read the [Transferring Credits](./transfer-credits.mdx) guide, the following should look familiar to you:
+If you've read the [Transferring Credits](./transfers/transfer-credits.mdx) guide, the following should look familiar to you:
 ```typescript
 // USER 1
 import { Account, ProgramManager, AleoKeyProvider, NetworkRecordProvider, AleoNetworkClient } from '@provablehq/sdk';

@@ -6,7 +6,7 @@ sidebar_position: 2
 ---
 
 
-Aleo supports two stablecoins backed by blue-chip asset issuers: [**USAD** and **USDCx**](../../common-uses/private-stablecoins.mdx). The main features distinguishing these stablecoins from other assets on Aleo are:
+Aleo supports two stablecoins backed by blue-chip asset issuers: [**USAD** and **USDCx**](../../../common-uses/private-stablecoins.mdx). The main features distinguishing these stablecoins from other assets on Aleo are:
 
 - A privacy-preserving freeze list check
 - A built-in mechanism enabling a monitoring service to observe private transfers without compromising the privacy of those transactions to the rest of the network
@@ -54,10 +54,10 @@ Sequence of operations to compute a formatted Merkle exclusion proof of type `[M
     |---|---|---|
     | USAD | [Endpoint](https://api.explorer.provable.com/v2/testnet/programs/test_usad_freezelist.aleo/compliance/freeze-list) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/programs/usad_freezelist.aleo/compliance/freeze-list) |
     | USDCx | [Endpoint](https://api.explorer.provable.com/v2/testnet/programs/test_usdcx_freezelist.aleo/compliance/freeze-list) | [Endpoint](https://api.explorer.provable.com/v2/mainnet/programs/usdcx_freezelist.aleo/compliance/freeze-list) |
-2. Convert the string array to a `BigInt` array using [`convertTreeToBigInt()`](../api-reference/sealance-merkle-tree.mdx#converttreetobigint).
-3. Compute the two index values needed to generate the exclusion proof routes for the account submitting the transaction using [`getLeafIndices()`](../api-reference/sealance-merkle-tree.mdx#getleafindices).
-4. Get the sibling path for each leaf index by calling [`getSiblingPath()`](../api-reference/sealance-merkle-tree.mdx#getsiblingpath) on each leaf. Be sure to indicate a depth of 16.
-5. Format the Merkle proof using [`formatMerkleProof()`](../api-reference/sealance-merkle-tree.mdx#formatmerkleproof).
+2. Convert the string array to a `BigInt` array using [`convertTreeToBigInt()`](../../api-reference/sealance-merkle-tree.mdx#converttreetobigint).
+3. Compute the two index values needed to generate the exclusion proof routes for the account submitting the transaction using [`getLeafIndices()`](../../api-reference/sealance-merkle-tree.mdx#getleafindices).
+4. Get the sibling path for each leaf index by calling [`getSiblingPath()`](../../api-reference/sealance-merkle-tree.mdx#getsiblingpath) on each leaf. Be sure to indicate a depth of 16.
+5. Format the Merkle proof using [`formatMerkleProof()`](../../api-reference/sealance-merkle-tree.mdx#formatmerkleproof).
 
 ```typescript
 import { SealanceMerkleTree } from '@provablehq/sdk';
