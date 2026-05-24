@@ -343,7 +343,6 @@ program foo.aleo {
         return x * MULTIPLIER + OFFSET;
     }
 }
-
 ```
 
 Constants are also supported in [libraries](./project_layout/libraries.mdx), which are separate packages containing reusable code. A library's root file and its submodules may declare constants, accessible from any dependent package as `library::CONST_NAME` or `library::path::to::submodule::CONST_NAME`.
