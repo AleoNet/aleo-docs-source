@@ -92,13 +92,20 @@ sequenceDiagram
 
 All paths are relative to the scanner base URL (e.g. `https://api.provable.com/scanner/mainnet` or your scanner host + network).
 
-The following key routes are available on the record scanner.
+The following key routes are available on the record scanner. Click each path for full API reference documentation.
 
-| Path | Method | Purpose                                                                     | Request body                                   | Response |
-|------|--------|-----------------------------------------------------------------------------|------------------------------------------------|----------|
-| `/pubkey` | GET | Ephemeral public key to encrypt the ViewKey prior to encrypted registration | —                                              | `{ "key_id": string, "public_key": string }` |
-| `/register/encrypted` | POST | Register view key (encrypted)                                               | `{ "key_id": string, "ciphertext": string }`   | `{ "uuid": string, "job_id"?: string, "status"?: string }` |
-| `/records/owned` | POST | Get owned records for a UUID                                                | `{ "uuid": string, "unspent"?: boolean, ... }` | Array of owned records (see SDK `OwnedRecord`) |
+| Path | Method | Purpose | Request body | Response |
+|------|--------|---------|--------------|----------|
+| [/pubkey](https://docs.provable.com/docs/api/services/get-scanner-pubkey) | GET | Ephemeral public key to encrypt the ViewKey prior to encrypted registration | — | `{ "key_id": string, "public_key": string }` |
+| [/register/encrypted](https://docs.provable.com/docs/api/services/get-scanner-register-encrypted) | POST | Register view key (encrypted) | `{ "key_id": string, "ciphertext": string }` | `{ "uuid": string, "job_id"?: string, "status"?: string }` |
+| [/revoke](https://docs.provable.com/docs/api/services/get-scanner-revoke) | POST | Revoke a registered view key by UUID | `{ "uuid": string }` | — |
+| [/records/owned](https://docs.provable.com/docs/api/services/get-scanner-records-owned) | POST | Get owned records for a UUID | `{ "uuid": string, "unspent"?: boolean, ... }` | Array of owned records (see SDK `OwnedRecord`) |
+| [/records/owned/batch](https://docs.provable.com/docs/api/services/get-scanner-records-owned-batch) | POST | Get owned records for multiple UUIDs in a single request | `{ "uuids": string[], "unspent"?: boolean, ... }` | Map of UUID → owned records |
+| [/records/encrypted](https://docs.provable.com/docs/api/services/get-scanner-records-encrypted) | POST | Get raw encrypted records for a UUID | `{ "uuid": string, ... }` | Array of encrypted records |
+| [/records/tags](https://docs.provable.com/docs/api/services/get-scanner-records-tags) | POST | Get record tags (serial numbers / commitment hashes) for a UUID | `{ "uuid": string, ... }` | Array of record tags |
+| [/records/sns](https://docs.provable.com/docs/api/services/get-scanner-records-sns) | POST | Get serial numbers for a UUID | `{ "uuid": string, ... }` | Array of serial numbers |
+| [/status](https://docs.provable.com/docs/api/services/get-scanner-status) | POST | Get scan status for a UUID | `{ "uuid": string }` | `{ "status": string, "job_id"?: string, ... }` |
+| [/status/batch](https://docs.provable.com/docs/api/services/get-scanner-status-batch) | POST | Get scan status for multiple UUIDs | `{ "uuids": string[] }` | Map of UUID → status |
 
 If the scanner returns **422** on `/records/owned`, the UUID may no longer be valid; re-register (e.g. via `/register/encrypted`) and retry.
 
