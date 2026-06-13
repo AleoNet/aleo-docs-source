@@ -7,7 +7,7 @@ description: How proof generation can be offloaded to third parties without comp
 
 # Delegated Proving
 
-Generating zero-knowledge proofs is computationally intensive. Delegated proving allows users to offload proof generation to a third-party prover — without giving up control of their funds or exposing their private key.
+Generating zero-knowledge proofs is computationally intensive. Delegated proving allows users to offload proof generation to a third-party prover without giving up control of their funds or exposing their private key.
 
 ## How It Works
 
@@ -26,34 +26,41 @@ Fee authorization is created separately and bound to a specific execution:
 - **Private fee**: `authorize_fee_private(private_key, credits_record, base_fee, priority_fee, execution_id)`
 - **Public fee**: `authorize_fee_public(private_key, base_fee, priority_fee, execution_id)`
 
-The authorization is cryptographically signed — the signature covers the function ID, all input IDs, the transition view key, and transition commitment. Any modification invalidates it.
+The authorization is cryptographically signed. The signature covers the function ID, all input IDs, the transition view key, and transition commitment. Any modification invalidates it.
 
 After this step, the user has a signed authorization but no proof yet.
 
 ### 2. Proving (Prover)
 
-The user sends the `Authorization` to a third-party prover. The prover:
+The user sends the `Authorization` to a third-party prover. For privacy-preserving delegated proving, the authorization is **encrypted** before transmission using an ephemeral X25519 key provided by the prover. The prover decrypts it only inside a **Trusted Execution Environment (TEE)**, ensuring that neither the prover operator nor any outside party can observe the plaintext inputs.
 
-1. Receives the sealed authorization (no private key included)
-2. Executes the program circuit using the authorized inputs
-3. Generates ZK proofs for each transition via Varuna
-4. Assembles the complete transaction with proofs
+The prover:
 
-The prover uses the account's **compute key** `(pk_sig, pr_sig, sk_prf)` — embedded in the authorization's signature — to generate valid proofs.
+1. Receives the (optionally encrypted) authorization
+2. Decrypts it within the TEE (if using the encrypted flow)
+3. Executes the program circuit using the authorized inputs
+4. Generates ZK proofs for each transition via Varuna
+5. Assembles the complete transaction with proofs
+
+The prover uses the account's **compute key** `(pk_sig, pr_sig, sk_prf)`, embedded in the authorization's signature, to generate valid proofs.
+
+See the [encrypted proving flow diagram](/build/sdk/guides/delegate_proving#flow-encrypted-proving) in the SDK guide for a step-by-step sequence of the encrypted submission.
 
 ## What the Prover Sees
 
 The `Authorization` contains a `Request` for each transition, which includes:
 
-| Data | Description |
-|---|---|
-| **All input values in plaintext** | Including private inputs and full record data — necessary for circuit witness construction |
-| **Signer address** | The account executing the transaction |
-| **Compute key** | `(pk_sig, pr_sig, sk_prf)` — embedded in the signature |
-| **`sk_tag`** | The tag secret key (derived from the graph key); can compute [record tags](/learn/advanced/record-scanning#tag-method-requires-view-key) for the signer's records |
-| **`tvk`** | The per-transition view key; can decrypt outputs of this specific transition |
+| Data | Description | Visible to prover (no TEE) | Visible to prover operator (encrypted TEE) |
+|---|---|---|---|
+| **All input values in plaintext** | Including private inputs and full record data, necessary for circuit witness construction | Yes | No |
+| **Signer address** | The account executing the transaction | Yes | No |
+| **Compute key** | `(pk_sig, pr_sig, sk_prf)` embedded in the signature | Yes | No |
+| **`sk_tag`** | The tag secret key (derived from the graph key); can compute [record tags](/learn/advanced/record-scanning#tag-method-requires-view-key) for the signer's records | Yes | No |
+| **`tvk`** | The per-transition view key; can decrypt outputs of this specific transition | Yes | No |
 
-The prover must see plaintext inputs to construct the circuit witnesses — this is inherent to how ZK proof generation works. The zero-knowledge property protects this data from **onchain observers**, but **not from the prover itself**.
+The prover must see plaintext inputs to construct the circuit witnesses. This is inherent to how ZK proof generation works. The zero-knowledge property protects this data from **onchain observers**, but without TEE protection the prover operator can observe these values.
+
+When using the **encrypted TEE flow**, the default for [Provable's Delegated Proving Service](/build/sdk/guides/delegate_proving), the authorization is encrypted before leaving the device and only decrypted inside the Trusted Execution Environment. The prover operator cannot observe any of the above; access is limited to the isolated TEE process. Input confidentiality is preserved by default when using Provable's infrastructure.
 
 ## What the Prover Cannot Do
 
@@ -69,16 +76,17 @@ The security guarantee of delegated proving is **integrity** (the prover can't c
 
 ## When to Use Delegated Proving
 
-- **Mobile wallets** — Phones lack the computational power for fast proof generation. Delegated proving makes private transactions practical on mobile devices.
-- **Web applications** — Browser-based apps can delegate proving to a backend service, keeping the user experience responsive.
-- **High-throughput scenarios** — Applications that need to generate many proofs quickly can distribute proving across dedicated infrastructure.
+- **Mobile wallets**: Phones lack the computational power for fast proof generation. Delegated proving makes private transactions practical on mobile devices.
+- **Web applications**: Browser-based apps can delegate proving to a backend service, keeping the user experience responsive.
+- **High-throughput scenarios**: Applications that need to generate many proofs quickly can distribute proving across dedicated infrastructure.
 
 ## Privacy Tradeoffs
 
 | Approach | Privacy | Performance |
 |---|---|---|
-| **Local proving** | Maximum — no data leaves the device | Slow on constrained hardware |
-| **Trusted delegated prover** | Prover sees inputs but is trusted not to misuse them | Fast — dedicated proving infrastructure |
+| **Local proving** | Maximum; no data leaves the device | Slow on constrained hardware |
+| **Encrypted delegated prover (TEE)** | Proving request is encrypted in transit; inputs are only decrypted inside a TEE so the operator cannot observe them | Fast with dedicated proving infrastructure |
+| **Trusted delegated prover (no TEE)** | Prover sees inputs but is trusted not to misuse them | Fast |
 | **Untrusted delegated prover** | Prover sees inputs; integrity is guaranteed but input confidentiality is not | Fast |
 
-For most users, delegated proving to a trusted service (like [Shield Wallet's](/participate/wallets) built-in prover) offers the best tradeoff between usability and privacy.
+For most users, delegated proving to a service that uses encrypted proving requests with TEE decryption (like [Shield Wallet's](/participate/wallets) built-in prover) offers the best tradeoff between usability and privacy. See the [SDK guide](/build/sdk/guides/delegate_proving) for implementation details on the encrypted flow.

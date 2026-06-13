@@ -11,11 +11,11 @@ Because records are stored onchain in encrypted form, wallets need a way to disc
 
 ## The Problem
 
-On a transparent blockchain, finding your balance is trivial — look up your address in the state. On Aleo, private records are encrypted and there's no public index linking records to owners. A wallet must scan the chain and identify its own records from the stream of encrypted data.
+On a transparent blockchain, finding your balance is trivial: look up your address in the state. On Aleo, private records are encrypted and there's no public index linking records to owners. A wallet must scan the chain and identify its own records from the stream of encrypted data.
 
 ## Record Discovery
 
-The only way to discover new records is **trial decryption** using the account's view key. There is no shortcut — every output record on the chain must be checked.
+The only way to discover new records is **trial decryption** using the account's view key. There is no shortcut; every output record on the chain must be checked.
 
 For each output record ciphertext onchain, the wallet:
 
@@ -25,15 +25,15 @@ For each output record ciphertext onchain, the wallet:
    ```
 2. Derives a decryption randomizer from the record view key
 3. Decrypts the owner field and checks if it matches the account's address
-4. If it matches, the record belongs to the account — decrypt the remaining fields
+4. If it matches, the record belongs to the account; decrypt the remaining fields
 
 This requires the account's **view key** and must process every output record on the chain.
 
 ### Delegated Scanning
 
-Because full-chain trial decryption is computationally expensive, wallets can delegate this work to a **confidential scanning service**. The wallet registers its view key with the service (optionally encrypted), and the service performs trial decryption server-side, maintaining an index of owned records per registered view key. The wallet then queries the service for its records rather than scanning the chain directly.
+Because full-chain trial decryption is computationally expensive, wallets can delegate this work to a **confidential scanning service**. The view key is **encrypted** before it leaves the device using an ephemeral X25519 key provided by the scanner, and only decrypted inside a **Trusted Execution Environment (TEE)**. Neither the scanning service operator nor any outside party can observe the view key. The service performs trial decryption inside the TEE, maintains an index of owned records per registered view key, and the wallet queries that index rather than scanning the chain directly.
 
-This is how wallets like [Shield](/participate/wallets) handle record scanning in practice.
+This is how wallets like [Shield](/participate/wallets) handle record scanning in practice. See the [encrypted registration flow diagram](/build/sdk/guides/record_scanning#flow-encrypted-registration) in the SDK guide for a step-by-step sequence, and the [SDK guide](/build/sdk/guides/record_scanning) for full implementation details.
 
 ## Spent Detection
 
@@ -73,7 +73,7 @@ Both are public data in the transition and are verified as part of the ZK proof.
 
 ### Full Scan
 
-Process every block from genesis, trial-decrypting all output records. This is the most thorough approach but also the slowest — it must touch every record ever created on the network.
+Process every block from genesis, trial-decrypting all output records. This is the most thorough approach but also the slowest; it must touch every record ever created on the network.
 
 ### Incremental Sync
 

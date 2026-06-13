@@ -55,8 +55,8 @@ requests in encrypted form to the delegated proving service.
 ### Flow (Encrypted Proving)
 
 0. Client must obtain an API key or JWT from the provable API.
-1. Client requests an ephemeral X25519 public key from the prover: `GET {proverBase}/pubkey`.
-2. Client builds a *proving request* (authorization, optional fee authorization, broadcast flag), encrypts it via a libsodium cryptobox (e.g. with [encryptProvingRequest](https://github.com/ProvableHQ/sdk/blob/mainnet/sdk/src/security.ts#L26)), and sends it to: `POST {proverBase}/prove/encrypted` with `{ "key_id": string, "ciphertext": string }`.
+1. Client requests an ephemeral X25519 public key from the prover: [`GET {proverBase}/pubkey`](https://docs.provable.com/docs/api/services/get-prove-pubkey).
+2. Client builds a *proving request* (authorization, optional fee authorization, broadcast flag), encrypts it via a libsodium cryptobox (e.g. with [encryptProvingRequest](https://github.com/ProvableHQ/sdk/blob/424e8e9b91a6cbf7d096b9327ebdec2b9513cbe8/sdk/src/security.ts#L25)), and sends it to: [`POST {proverBase}/prove/encrypted`](https://docs.provable.com/docs/api/services/post-prove-encrypted) with `{ "key_id": string, "ciphertext": string }`.
 3. Prover decrypts in a secure environment, runs the proof, and returns a **transaction** and **broadcast_result** (if the request asked for broadcast). The client may submit the transaction themselves or use the broadcast result.
 
 ```mermaid
@@ -82,8 +82,8 @@ All paths are relative to the prover base URL (e.g. `https://api.provable.com/pr
 
 | Path | Method | Purpose | Request body | Response |
 |------|--------|----------|--------------|----------|
-| `/pubkey` | GET | Ephemeral public key for encrypted proving | — | `{ "key_id": string, "public_key": string }` |
-| `/prove/encrypted` | POST | Submit proving request (encrypted) | `{ "key_id": string, "ciphertext": string }` | Same as `/prove` on success |
+| [`/pubkey`](https://docs.provable.com/docs/api/services/get-prove-pubkey) | GET | Ephemeral public key for encrypted proving | — | `{ "key_id": string, "public_key": string }` |
+| [`/prove/encrypted`](https://docs.provable.com/docs/api/services/post-prove-encrypted) | POST | Submit proving request (encrypted) | `{ "key_id": string, "ciphertext": string }` | Same as `/prove` on success |
 
 Authentication (e.g. JWT in `Authorization`, cookies for session) is required for Provable’s API. In Node, you may need 
 to forward the `set-cookie` header from the `/pubkey` response to the `/prove/encrypted` request so the prover can 
