@@ -1,0 +1,1178 @@
+---
+id: usdcx_bridge
+title: USDCx Bridge
+sidebar_label: USDCx Bridge
+sidebar_position: 6
+description: Integrator manual for the Aleo USDCx bridge (V2) and shielded wrapper.
+toc_min_heading_level: 2
+toc_max_heading_level: 3
+---
+
+# Aleo USDCx Bridge — Integrator Manual (V2)
+
+This manual documents the Aleo Leo programs that implement the USDCx bridge between Ethereum / ARC and Aleo, plus everything an external integrator needs to drive them end-to-end:
+
+- **V2 bridge** — the current bridge, with hook data and multi-chain support. **Live on testnet and mainnet.**
+- **Shielded wrapper** — a wrapper in front of V2 that mints private (record) USDCx through a public mint into the wrapper without revealing the recipient address. **Live on testnet and mainnet.**
+
+The legacy V1 bridge (`usdcx_bridge.aleo`) is **deprecated** and is not documented here. It keeps running on mainnet until its announced deprecation date; existing V1 integrations should migrate now (see the [Quickstart](#quickstart) checklist and [§10](#10-migrating-from-v1)).
+
+The manual covers: the exposed transitions, the 305-byte deposit payload format, hook-data length and flag bytes, program names on testnet and mainnet, the Circle xReserve attestation endpoint, the Aleo courtesy backend (mint/burn history), and examples using `cast`, `curl`, and `leo execute`. It also includes Provable JS SDK snippets for the BHP256 commitment used by the shielded wrapper, including a full explanation of the `secret_nonce`.
+
+:::info
+**Who actually executes the Aleo mint?** Aleo runs a courtesy backend that watches Circle attestations and submits the matching Aleo mint on the user's behalf for the common cases (hook flag 0 = public, hook flag 1 = private record). The shielded wrapper (hook flag 2) is the one path that *must* be executed by the user, because only they hold the BHP256 `secret_nonce`. See [§2.5](#25-aleo-courtesy-backend-mintburn-history--auto-execution) for the backend API surface; the CLI `leo execute` examples in [§6](#6-bridge-v2--usdcx_bridge_v2aleo)–[§7](#7-shielded-wrapper--shielded_usdcx_wrapperaleo) are the fallback / manual path you can always use.
+:::
+
+
+---
+
+## Quickstart
+
+Recommended path: **validate on testnet first, then cut over to mainnet.** The full flow is available end-to-end on both networks.
+
+**Flow:** deposit on the source chain → compute `messageHash = keccak256(payload)` locally → fetch the Circle attestation → mint on Aleo.
+
+```
+depositToRemote()          keccak256(payload)        GET /v1/attestations/{hash}      mint on Aleo
+   on xReserve       -->      = messageHash      -->     (Circle, poll until      -->  flags 0/1: backend does it
+ (Ethereum / ARC)           (computed locally)            attestation ready)             flag  2:  you do it
+```
+
+### Program IDs
+
+| Program | Testnet | Mainnet |
+| --- | --- | --- |
+| Bridge V2 | `test_usdcx_bridge_v2.aleo` | `usdcx_bridge_v2.aleo` |
+| Shielded wrapper | `shielded_usdcx_wrapper.aleo` | `shielded_usdcx_wrapper.aleo` |
+| Stablecoin (USDCx) | `test_usdcx_stablecoin.aleo` | `usdcx_stablecoin.aleo` |
+
+### The payload in one line
+
+305 bytes: the standard xReserve fields (magic, version, amount, domains, recipient, tokens, depositor, max_fee, nonce — bytes [0..236]) followed by `hook_data_len = 0x00000041` (always 65) at offset 236 and 65 bytes of `hook_data` at offset 240. Full byte map in [§3.2](#32-the-65-byte-hook-data--flag-byte-semantics) / Appendix B.
+
+### The mint type lives in `hookData[0]` (the flag byte)
+
+Each row is the full 65-byte `hook_data`:
+
+| Flag | Mint type | Hook data (65 bytes) | Aleo transition | Who executes it |
+| --- | --- | --- | --- | --- |
+| `0` | Public balance | `0x00` + 64 zero bytes | `mint_public([u8;305], sig, digest)` | Courtesy backend (automatic) |
+| `1` | Private record | `0x01` + 64 zero bytes | `mint_record([u8;305], sig, digest, [MerkleProof;2])` | Courtesy backend (automatic) |
+| `2` | Shielded (via wrapper) | `0x02` + `commitment[32]` + 32 zero bytes | `shielded_usdcx_wrapper.aleo/private_mint(...)` | **You** (only you hold the `secret_nonce`) |
+
+`remoteRecipient` in `depositToRemote` = the real Aleo recipient for flags 0/1, but the **wrapper address** for flag 2 ([§7](#7-shielded-wrapper--shielded_usdcx_wrapperaleo)).
+
+### Burn destinations
+
+V2 accepts Ethereum (`0`) and ARC (`26`) only; any other `native_domain` fails.
+
+```
+burn_public(amount: u128, native_domain: u32, native_recipient: [u8;32])
+burn_public_as_signer(...)   // same, but burns from self.signer
+```
+
+Note: **domain ≠ EVM chain ID.** ARC's domain is `26`; its mainnet chain ID is `5042` (testnet `5042002`).
+
+:::warning
+⚠️ **`native_recipient` must be a correctly serialized Ethereum address.** It is a raw `[u8; 32]`: 12 zero bytes followed by the 20 address bytes. The bridge cannot validate that these bytes correspond to an address you control — **if you pass a malformed or wrongly padded array, the burn still succeeds and the USDC is released to whatever address those bytes decode to, with no recovery path.** Always build the array with the helper in [§14](#14-appendix-d--address--hex--leo-array-conversion) (`ethAddressToAleoArray`) rather than hand-assembling it, and verify the round-trip before burning on mainnet.
+:::
+
+### Key endpoints
+
+| What | URL |
+| --- | --- |
+| Aleo RPC (both networks) | `https://api.explorer.provable.com/v2` |
+| Circle attestation (testnet) | `https://xreserve-api-testnet.circle.com/v1/attestations/{messageHash}` |
+| Circle attestation (mainnet) | `https://xreserve-api.circle.com/v1/attestations/{messageHash}` |
+
+### Migrating from V1? Five things change
+
+1. **Program ID.** `usdcx_bridge.aleo` → `usdcx_bridge_v2.aleo` (mainnet); `test_usdcx_bridge.aleo` → `test_usdcx_bridge_v2.aleo` (testnet). Add `shielded_usdcx_wrapper.aleo` if you want shielded mints.
+2. **Payload: 240 → 305 bytes.** All leading fields are identical; append `hook_data_len` (4 bytes, always `0x00000041`) + 65 bytes of `hook_data`.
+3. **Mint type selection.** Stop POSTing execution requests to the backend; the flag byte in `hookData[0]` now selects the mint type.
+4. **Transitions.** `mint_public` takes the 305-byte payload; `mint_private` is replaced by `mint_record`; flag 2 shielded mints go through the wrapper's `private_mint`.
+5. **Burn destinations.** Ethereum (`0`) and ARC (`26`) only.
+
+Details in [§10](#10-migrating-from-v1).
+
+### Before you cut over to mainnet
+
+- Public mints (flag 0) and private-record mints (flag 1) are executed automatically by Aleo's infrastructure — you only submit the transaction on the Ethereum/ARC side.
+- Shielded mints (flag 2) additionally require **you** to submit the Aleo transaction to `shielded_usdcx_wrapper.aleo/private_mint` once the Circle attestation is available.
+- When burning, use the correct domain (`0` = Ethereum, `26` = ARC) to specify the destination chain where your burned tokens will be redeemed.
+- Your mainnet V1 integration keeps working until the deprecation date, so you can migrate without downtime.
+
+---
+
+## Table of Contents
+
+- [Quickstart](#quickstart)
+1. [Introduction](#1-introduction)
+2. [Networks, Program Names, and Endpoints](#2-networks-program-names-and-endpoints)
+3. [The Deposit Payload Format](#3-the-deposit-payload-format)
+4. [The Ethereum Leg — `depositToRemote`](#4-the-ethereum-leg--deposittoremote)
+5. [Fetching the Circle Attestation](#5-fetching-the-circle-attestation)
+6. [Bridge V2 — `usdcx_bridge_v2.aleo`](#6-bridge-v2--usdcx_bridge_v2aleo)
+7. [Shielded Wrapper — `shielded_usdcx_wrapper.aleo`](#7-shielded-wrapper--shielded_usdcx_wrapperaleo)
+8. [Provable JS SDK Reference for Shielded Operations](#8-provable-js-sdk-reference-for-shielded-operations)
+9. [End-to-End Worked Examples](#9-end-to-end-worked-examples)
+10. [Migrating from V1](#10-migrating-from-v1)
+11. [Appendix A — Constants Cheat Sheet](#11-appendix-a--constants-cheat-sheet)
+12. [Appendix B — Payload Byte Map](#12-appendix-b--payload-byte-map)
+13. [Appendix C — Hook Data Layout Per Flag Byte](#13-appendix-c--hook-data-layout-per-flag-byte)
+14. [Appendix D — Address / Hex / Leo Array Conversion](#14-appendix-d--address--hex--leo-array-conversion)
+
+---
+
+## 1. Introduction
+
+### 1.1 What these programs do
+
+The bridge is a Circle xReserve / CCTP-style bridge for USDC between an EVM chain (Ethereum, Sepolia, ARC) and Aleo.
+
+- **Mint side (EVM → Aleo).** A user calls `depositToRemote(...)` on the xReserve contract on the source chain. xReserve takes custody of the USDC and emits a `DepositedToRemote` event that carries every dynamic field of the canonical payload (including the hookData). Circle's attester service observes the deposit, builds the canonical payload bytes, and signs them. Anyone can present the signed payload to the Aleo bridge program, which verifies the ECDSA signature and mints USDCx to the recipient encoded in the payload. The payload is also reconstructible locally from `DepositedToRemote` + the deterministically derived deposit nonce ([§4.6](#46-predicting-the-deposit-nonce-locally)), and its keccak256 is the `messageHash` Circle keys attestations by — you don't need to wait for Circle to learn it.
+- **Burn side (Aleo → EVM).** A user calls `burn_public` (or `private_burn` on the shielded wrapper) on the Aleo bridge program, which burns their USDCx and emits a message that Circle's attestation service signs. The destination-chain xReserve contract releases USDC upon receiving that signed message.
+
+This manual focuses on the **Aleo programs** themselves (interface, payload format, hooks, nonces, etc.) plus the EVM call that initiates the mint flow, since they form the contract you integrate against.
+
+### 1.2 High-level flows
+
+**Mint (EVM → Aleo)**
+
+1. User calls `depositToRemote()` on xReserve (EVM chain) — xReserve emits `DepositedToRemote` and takes custody of the USDC.
+2. Circle observes the deposit, builds the payload bytes, and signs them — producing an attestation, fetched via `GET /v1/attestations/{messageHash}`.
+3. The mint is executed on Aleo:
+   - Flag 0/1 (public mint or `mint_record`): the courtesy backend executes it automatically (default path).
+   - Flag 2 (shielded wrapper mint): the user must execute it — only they hold the `secret_nonce`.
+4. The bridge program on Aleo verifies the signature, checks the freeze list and nullifier, then mints USDCx.
+
+**Burn (Aleo → EVM)**
+
+1. User calls `burn_public()` on the Aleo bridge program — it burns the USDCx and emits a burn message.
+2. Circle's attestation service signs the burn message.
+3. xReserve on the EVM chain releases USDC to `native_recipient`.
+
+### 1.3 The two programs at a glance
+
+| Aspect | Bridge V2 | Shielded Wrapper |
+| --- | --- | --- |
+| Deployed on mainnet | Yes (`usdcx_bridge_v2.aleo`) | Yes (`shielded_usdcx_wrapper.aleo`) |
+| Deployed on testnet | Yes (`test_usdcx_bridge_v2.aleo`) | Yes (`shielded_usdcx_wrapper.aleo`) |
+| Deposit payload size | 305 bytes | 305 bytes (delegates to V2) |
+| Hook data | 65 bytes | 65 bytes |
+| Mint to public balance | `mint_public` (flag byte 0) | n/a |
+| Mint to record | `mint_record` (flag byte 1) | n/a |
+| Mint to record via wrapper | `mint_public` (flag byte 2, caller must be the wrapper) | `private_mint` |
+| Burn variants | `burn_public` + `burn_public_as_signer` | `private_burn` |
+
+### 1.4 Privacy at a glance
+
+| Mint mode | Source-chain amount visible? | Final Aleo recipient visible on Ethereum/ARC? | Aleo result |
+| --- | --- | --- | --- |
+| `mint_public` (flag 0) | Yes | Yes (it's in `remoteRecipient`) | Public USDCx balance |
+| `mint_record` (flag 1) | Yes | Yes (it's in `remoteRecipient`) | Private USDCx record |
+| Shielded wrapper mint (flag 2) | Yes | **No** (`remoteRecipient` is the wrapper; real recipient is only inside the BHP256 commitment) | Private USDCx record |
+
+`mint_record` hides the recipient *on the Aleo side*, but the final Aleo recipient is still in the source-chain xReserve deposit. Only the shielded wrapper avoids putting the real Aleo recipient directly on the source chain.
+
+### 1.5 Glossary
+
+- **Attester.** The Ethereum public key (a 20-byte address) whose ECDSA signature Circle places on a deposit payload. The Aleo bridge stores the expected attester key on chain and rejects mints whose `digest` was not signed by it.
+- **Attestation.** A 65-byte ECDSA signature (`r || s || v`) produced by Circle over the keccak256 hash of the deposit payload. Returned by Circle's `/v1/attestations/{messageHash}` endpoint as a hex string.
+- **Nullifier.** The 32-byte `nonce` field embedded in every deposit payload, used to prevent the same attestation from being redeemed twice. The bridge stores used nonces in its `nullifier` mapping.
+- **Hook data.** A fixed-length blob of bytes appended to the payload at offset 240. Its first byte (the "flag byte") selects which mint type the bridge will perform; the remaining bytes are used by the shielded wrapper to carry a BHP256 commitment.
+- **Freeze list.** A list of sanctioned addresses. The bridge checks the recipient is **not** on this list before minting. Public mints look the recipient up in a plain mapping; private mints prove non-inclusion in a sorted Merkle tree of the same list (so the recipient address stays private).
+- **Compliance record.** A record type from the stablecoin program that's emitted alongside private mints; Circle uses these records to audit private flows under regulatory requirements.
+- **`mint_public` vs `mint_record` vs shielded mint.** Three distinct delivery shapes for the minted USDCx:
+  - `mint_public` — mints into the public balance mapping of the stablecoin program. Recipient address is public.
+  - `mint_record` — mints a private USDCx record (a UTXO-like ciphertext) directly to the recipient address. Caller must also supply a Merkle non-inclusion proof against the freeze list.
+  - Shielded mint — a public mint into the wrapper program's address, immediately followed (inside the wrapper) by a `transfer_public_to_private` to the real recipient. Distinct from `mint_record` because it doesn't need a Merkle proof at mint time (the wrapper resolves the recipient from a BHP256 commitment carried in the hook data instead).
+- **Domain.** A CCTP-style 32-bit identifier for a chain. Ethereum = `0`, Aleo = `10002`, ARC = `26`. Note that a domain is **not** the same as an EVM chain ID (ARC's domain is 26; its chain IDs are 5042 mainnet / 5042002 testnet). See https://developers.circle.com/xreserve/references/supported-blockchains-and-domains
+
+---
+
+## 2. Networks, Program Names, and Endpoints
+
+### 2.1 Program IDs
+
+| Program | Testnet | Mainnet |
+| --- | --- | --- |
+| Bridge V2 | `test_usdcx_bridge_v2.aleo` | `usdcx_bridge_v2.aleo` |
+| Shielded wrapper | `shielded_usdcx_wrapper.aleo` | `shielded_usdcx_wrapper.aleo` |
+| Stablecoin (USDCx token) | `test_usdcx_stablecoin.aleo` | `usdcx_stablecoin.aleo` |
+
+The shielded wrapper's Aleo address (derived via `Address.fromProgramId("shielded_usdcx_wrapper.aleo")`) is the same on both networks:
+
+```
+aleo183r3zgsr57fwtgk5duzeq9kqdkpmmtfj4k5469ddvm3tcfhhls9szktw82
+```
+
+### 2.2 Aleo RPC base URLs
+
+| Network | URL |
+| --- | --- |
+| Testnet | `https://api.explorer.provable.com/v2` |
+| Mainnet | `https://api.explorer.provable.com/v2` |
+
+### 2.3 Source-chain xReserve contract addresses
+
+| Network | Chain ID | xReserve contract | USDC token |
+| --- | --- | --- | --- |
+| Sepolia (testnet) | `11155111` | `0x008888878f94C0d87defdf0B07f46B93C1934442` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+| Ethereum (mainnet) | `1` | `0x8888888199b2Df864bf678259607d6D5EBb4e3Ce` | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` |
+| ARC testnet | `5042002` | `0x008888878f94C0d87defdf0B07f46B93C1934442` | `0x3600000000000000000000000000000000000000` |
+| ARC mainnet | `5042` | `0x008888878f94C0d87defdf0B07f46B93C1934442` | `0x3600000000000000000000000000000000000000` |
+
+The ARC USDC address is also the `localToken` value carried in ARC deposit payloads (same on testnet and mainnet).
+
+xReserve interface (the only function you call as a depositor):
+
+```jsonc
+function depositToRemote(
+    uint256 value,
+    uint32  remoteDomain,
+    bytes32 remoteRecipient,
+    address localToken,
+    uint256 maxFee,
+    bytes   hookData
+) external;
+```
+
+The single event you parse:
+
+```
+event DepositedToRemote(
+    address indexed localToken,
+    uint256         value,
+    address indexed localDepositor,
+    bytes32 indexed remoteRecipient,
+    uint32          remoteDomain,
+    bytes32         remoteToken,
+    uint256         maxFee,
+    bytes           hookData
+);
+```
+
+Three fields are indexed (carried in topics 1–3): `localToken`, `localDepositor`, `remoteRecipient`. The other five (`value`, `remoteDomain`, `remoteToken`, `maxFee`, `hookData`) are in the event's `data`.
+
+xReserve is the emitter. The event already contains every dynamic field of the canonical xReserve payload, so the receipt alone — plus the protocol constants from [§2.6](#26-protocol-constants) and the deterministic nonce from [§4.6](#46-predicting-the-deposit-nonce-locally) — is enough to reconstruct the 305-byte payload locally. `messageHash` is then just `keccak256(payload)` ([§3.3](#33-the-messagehash), [§4.5](#45-computing-messagehash-and-the-canonical-payload-locally)).
+
+### 2.4 Circle xReserve attestation API
+
+| Network | Base URL |
+| --- | --- |
+| Testnet | `https://xreserve-api-testnet.circle.com` |
+| Mainnet | `https://xreserve-api.circle.com` |
+
+Single endpoint used:
+
+```
+GET {base}/v1/attestations/{messageHash}
+```
+
+Where `messageHash` is `keccak256(payload)` (computed locally — see [§3.3](#33-the-messagehash), [§4.5](#45-computing-messagehash-and-the-canonical-payload-locally)).
+
+### 2.5 Aleo courtesy backend (mint/burn history + auto-execution)
+
+In addition to the on-chain programs and Circle's attestation API, Aleo operates a backend that:
+
+- Indexes mint and burn events from both the source-chain and Aleo sides into one queryable history.
+- **Auto-executes** Aleo mints whenever the mint mode can be determined from on-chain data alone — i.e. hook flag 0 (`mint_public`) and hook flag 1 (`mint_record`). The backend constructs the freeze-list Merkle non-inclusion proof for `mint_record`; integrators don't need to fetch that proof themselves.
+- It cannot auto-execute shielded wrapper mints (hook flag 2), because the `secret_nonce` needed to open the BHP256 commitment is only held by the user.
+
+| Mint path | How mint mode is selected | Auto-executed by backend |
+| --- | --- | --- |
+| V2 flags 0 / 1 | Hook flag in payload | Yes |
+| V2 shielded wrapper (flag 2) | Hook flag `2` + `secret_nonce` | Never — user must execute |
+
+Base URLs:
+
+| Network | Backend base URL |
+| --- | --- |
+| Testnet | `https://api.usdcx.aleo.dev/api` |
+| Mainnet | `https://api.usdcx.aleo.dev/api` |
+
+#### `GET /api/mints?minterEthAddress={address}&evmChain={ethereum|arc}`
+
+Returns the indexed history of mints originated by a given Ethereum address (the history also includes legacy V1 entries):
+
+```json
+[
+  {
+    "id": "string",
+    "createdAt": "2026-06-08T00:00:00.000Z",
+    "updatedAt": "2026-06-08T00:00:00.000Z",
+    "blockNumber": "123456",
+    "txId": "0x...",
+    "ethAddress": "0x...",
+    "amount": "5000000",
+    "remoteRecipient": "0x...",
+    "aleoAddress": "aleo1...",
+    "attestationNonce": "0x...",
+    "attestationMessageHash": "0x...",
+    "attestationPayload": "0x5a2e0acd...",
+    "evmChain": "ethereum",
+    "sourceDomain": 0,
+    "aleo": {
+      "status": "MintTxAccepted",
+      "aleoMintTxId": "at1..."
+    },
+    "mintExecution": {
+      "source": "hookData",
+      "executionType": "public"
+    }
+  }
+]
+```
+
+Known `aleo.status` values: `Pending`, `MintTxAccepted`, `MintTxRejected`, `Failed`.
+
+Known `mintExecution.executionType` values: `public`, `private`, `external` (= shielded wrapper, user-executed).
+
+#### `GET /api/burns?burnerAleoAddress={address}&evmChain={ethereum|arc}`
+
+Returns the burn history for an Aleo address:
+
+```json
+[
+  {
+    "id": "string",
+    "txId": "at1...",
+    "amount": "5000000",
+    "remoteEthereumAddress": "0x...",
+    "evmChain": "ethereum",
+    "destinationDomain": 0
+  }
+]
+```
+
+`evmChain` defaults to `ethereum` in current clients; pass `arc` to scope to ARC.
+
+### 2.6 Protocol constants
+
+| Constant | Value | Notes |
+| --- | --- | --- |
+| `MAGIC_VALUE` | `0x5a2e0acd` | First 4 bytes of every payload |
+| `SUPPORTED_VERSION` | `0x00000001` | Bytes 4–7 |
+| Aleo domain | `10002` (`0x00002712`) | The `remoteDomain` arg to `depositToRemote` for any mint into Aleo, and what appears in payload bytes [40..44]. |
+| Ethereum domain | `0` (`0x00000000`) | The `sourceDomain` passed to the nonce derivation in [§4.6](#46-predicting-the-deposit-nonce-locally) for an Ethereum-Aleo deposit, and the `native_domain` you pass to Aleo `burn_public` to burn back to Ethereum. |
+| ARC domain | `26` (`0x0000001a`) | The `sourceDomain` for an ARC-Aleo deposit, and the `native_domain` you pass to Aleo `burn_public` to burn back to ARC. Not to be confused with ARC's EVM chain IDs (5042 mainnet / 5042002 testnet). |
+| `HOOK_DATA_LENGTH` | `65` bytes | Enforced via payload bytes [236..239] = `0x00000041` |
+| Flag bytes (hook data byte 240) | `0`=public, `1`=record, `2`=shielded | See [§3.2](#32-the-65-byte-hook-data--flag-byte-semantics) |
+
+---
+
+## 3. The Deposit Payload Format
+
+### 3.1 The 305-byte payload
+
+```
+offset    size  field
+--------  ----  -----------------------------------------------------
+[0..3]      4   magic value   (0x5a2e0acd)
+[4..7]      4   version       (0x00000001)
+[8..39]    32   amount         (u256 big-endian; top 16 bytes must be zero -> u128)
+[40..43]    4   remote_domain (Aleo = 10002)
+[44..75]   32   remote_token  (Aleo USDC token identifier)
+[76..107]  32   remote_recipient (Aleo address bytes; for shielded mints this
+                 must be the wrapper program's address)
+[108..139] 32   local_token   (source-chain USDC address, left-padded to 32)
+[140..171] 32   localDepositor (source-chain sender, left-padded to 32)
+[172..203] 32   max_fee       (u256 big-endian)
+[204..235] 32   nonce         (deposit-intent nonce; used as nullifier -- see §4.6)
+[236..239]  4   hook_data_len (u32 big-endian; must be 65 = 0x00000041)
+[240..304] 65   hook_data     (see §3.2)
+```
+
+### 3.2 The 65-byte hook data — flag byte semantics
+
+Hook data sits at `payload[240..305]`. The **first byte (`payload[240]`)** is the *flag byte* and selects which V2 transition the caller is allowed to invoke:
+
+| Flag byte | Aleo transition | Meaning | Rest of hook data |
+| --- | --- | --- | --- |
+| `0` | `mint_public` | Mint to the recipient's public balance | Ignored (zero-filled by convention) |
+| `1` | `mint_record` | Mint a private record directly to the recipient | Ignored (zero-filled by convention) |
+| `2` | `mint_public` (caller and recipient must both be `shielded_usdcx_wrapper.aleo`) | "Shielded" mint via the wrapper | Bytes `[241..273]` = 32-byte BHP256 commitment over the real recipient. Bytes `[273..305]` = 32 zero bytes. |
+
+The wrapper's `private_mint` calls the V2 bridge's `mint_public` internally. V2 enforces that when flag = 2, both `self.caller` and the recipient in the payload **must** equal the wrapper program's address — that's how V2 ensures `mint_public` can only be reached with flag = 2 if it was invoked through the wrapper.
+
+### 3.3 The messageHash
+
+```
+messageHash = keccak256(payload)
+```
+
+This is the value Circle keys attestations by, and the value the Aleo bridge re-computes to verify you've not tampered with the payload (`digest == keccak256(payload)`).
+
+In practice you compute it locally as `keccak256(payload)` once you've reconstructed the payload bytes. There is no separate event on the deposit receipt carrying the canonical bytes for you to extract. See [§4.5](#45-computing-messagehash-and-the-canonical-payload-locally).
+
+### 3.4 Recovering the payload locally before Circle returns it
+
+You can reconstruct the payload yourself the moment the EVM transaction confirms — Circle's attestation will eventually return the same bytes, but you may want to fetch the attestation by `messageHash` immediately without waiting for it to be indexed. Reconstruction is a fixed-format byte build per [§3.1](#31-the-305-byte-payload), using only:
+
+- Fields from the `DepositedToRemote` event — `value`, `remoteDomain`, `remoteToken`, `remoteRecipient`, `localToken`, `localDepositor`, `maxFee`, and `hookData` are all in the event.
+- The constants from [§2.6](#26-protocol-constants) (magic value, version, `hookDataLen`).
+- The nonce derived from `(sourceDomain, txHash, depositToRemoteLogIndex)` per [§4.6](#46-predicting-the-deposit-nonce-locally).
+
+---
+
+## 4. The Ethereum Leg — `depositToRemote`
+
+### 4.1 Parameter mapping
+
+| `depositToRemote` argument | Maps to payload field | Notes |
+| --- | --- | --- |
+| `value` (`uint256`) | bytes [8..40] (amount) | u128-range amount in USDC base units (6 decimals) |
+| `remoteDomain` (`uint32`) | bytes [40..44] | `10002` for Aleo |
+| `remoteRecipient` (`bytes32`) | bytes [76..108] | The Aleo recipient encoded as raw bytes32 (see [§14](#14-appendix-d--address--hex--leo-array-conversion)) |
+| `localToken` (`address`) | bytes [108..140] (left-padded) | The source-chain USDC contract |
+| `maxFee` (`uint256`) | bytes [172..204] | Maximum fee you'll pay Circle; commonly `100_000` (0.10 USDC) |
+| `hookData` (`bytes`) | bytes [240..305] | Must be exactly 65 bytes |
+
+The `localDepositor` (`payload[140..172]`) is filled in by xReserve from `msg.sender` of the `depositToRemote` call; the `nonce` (`payload[204..236]`) is assigned deterministically from `(sourceDomain, txHash, depositToRemoteLogIndex)` — see [§4.6](#46-predicting-the-deposit-nonce-locally). Both can be reconstructed locally from the receipt once `DepositedToRemote` is parsed.
+
+### 4.2 Hook data per mint type
+
+| Target | Hook data (65 bytes) |
+| --- | --- |
+| `mint_public` (flag 0) | `0x00` + `0x00...` (64 zero bytes) |
+| `mint_record` (flag 1) | `0x01` + `0x00...` (64 zero bytes) |
+| Shielded mint via wrapper (flag 2) | `0x02` + `commitment[32]` + `0x00...` (32 zero bytes) where `commitment = BHP256::commit_to_field(recipient_address, secret_nonce).to_bytes_le()` |
+
+See [§7.4](#74-the-secret_nonce-explained) for the secret-nonce semantics and [§8](#8-provable-js-sdk-reference-for-shielded-operations) for the JS SDK calls that produce `commitment`.
+
+### 4.3 `cast` example — public mint deposit
+
+Replace placeholders accordingly. This example targets Sepolia → Aleo testnet, depositing `5 USDC` (i.e. `value = 5_000_000`) for a public mint into `aleo1...recipient`.
+
+```bash
+# Environment
+RPC_URL="https://sepolia.infura.io/v3/<your_key>"
+PRIVATE_KEY="0x<your_eth_private_key>"
+XRESERVE="0x008888878f94C0d87defdf0B07f46B93C1934442"
+USDC="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+AMOUNT="5000000"                  # 5 USDC (6 decimals)
+MAX_FEE="100000"                  # 0.10 USDC
+ALEO_DOMAIN="10002"
+RECIPIENT_BYTES32="0x<32 bytes of bech32m-decoded aleo1...recipient>"
+# 65 bytes, all zero -> flag byte 0 -> mint_public
+HOOK_DATA="0x$(printf '00%.0s' {1..65})"
+
+# 1. Approve USDC for the xReserve contract
+cast send "$USDC" "approve(address,uint256)" \
+    "$XRESERVE" "$AMOUNT" \
+    --private-key "$PRIVATE_KEY" --rpc-url "$RPC_URL"
+
+# 2. depositToRemote
+cast send "$XRESERVE" \
+    "depositToRemote(uint256,uint32,bytes32,address,uint256,bytes)" \
+    "$AMOUNT" "$ALEO_DOMAIN" "$RECIPIENT_BYTES32" "$USDC" "$MAX_FEE" "$HOOK_DATA" \
+    --private-key "$PRIVATE_KEY" --rpc-url "$RPC_URL"
+```
+
+To turn an Aleo address into `bytes32`, see [§14](#14-appendix-d--address--hex--leo-array-conversion).
+
+### 4.4 Events emitted
+
+A successful `depositToRemote` transaction's receipt contains one event from xReserve that you care about:
+
+```
+event DepositedToRemote(
+    address indexed localToken,
+    uint256         value,
+    address indexed localDepositor,
+    bytes32 indexed remoteRecipient,
+    uint32          remoteDomain,
+    bytes32         remoteToken,
+    uint256         maxFee,
+    bytes           hookData
+);
+```
+
+This single event is your audit trail **and** the source of every dynamic field needed to reconstruct the canonical xReserve payload — plus the log `index` that feeds the deterministic nonce derivation in [§4.6](#46-predicting-the-deposit-nonce-locally). The receipt also contains routine ERC-20 `Transfer` events and an internal `Deposited` event from xReserve's custody contract; neither is needed for the bridge flow.
+
+There is **no event whose data is the canonical payload bytes**. You build the payload locally from this event + the [§2.6](#26-protocol-constants) constants + the derived nonce — see [§4.5](#45-computing-messagehash-and-the-canonical-payload-locally).
+
+### 4.5 Computing `messageHash` (and the canonical payload) locally
+
+`messageHash = keccak256(payload)` where `payload` is the 305-byte byte string laid out per [§3.1](#31-the-305-byte-payload). You build it locally from three sources:
+
+| Source | Goes into payload bytes |
+| --- | --- |
+| Constants from [§2.6](#26-protocol-constants) | `magic` [0..4], `version` [4..8], `hookDataLen = 0x00000041` [236..240] |
+| Receipt's `DepositedToRemote` event | `value` → [8..40], `remoteDomain` → [40..44], `remoteToken` → [44..76], `remoteRecipient` → [76..108], `localToken` → [108..140] (left-padded to 32), `localDepositor` → [140..172] (left-padded to 32), `maxFee` → [172..204], `hookData` → [240..305] |
+| Derived per [§4.6](#46-predicting-the-deposit-nonce-locally) from `(sourceDomain, txHash, log.index)` | `nonce` → [204..236] |
+
+Then `messageHash = cast keccak "$PAYLOAD_HEX"`.
+
+You can do this the moment the receipt is in hand — before Circle has indexed anything — and use the result to query Circle by `messageHash` ([§5](#5-fetching-the-circle-attestation)). Because the event itself carries `remoteToken` and `hookData`, the reconstruction does not depend on any side-channel knowledge of what you sent.
+
+### 4.6 Predicting the deposit nonce locally
+
+`payload[204..236]` is the *deposit-intent nonce* and is what the bridge uses as the nullifier. xReserve derives it deterministically from `(sourceDomain, sourceTxHash, depositToRemoteLogIndex)`:
+
+```
+nonce = keccak256(
+    abi.encode(uint32 sourceDomain)
+ || sourceTxHashBytes
+ || abi.encode(uint256 depositToRemoteLogIndex)
+)
+```
+
+TypeScript reference:
+
+```ts
+import { AbiCoder, concat, getBytes, keccak256 } from "ethers";
+
+function calculateDepositIntentNonce(
+  sourceDomain: number,
+  txHash: `0x${string}`,
+  eventIndex: number,
+): `0x${string}` {
+  const abi = AbiCoder.defaultAbiCoder();
+  return keccak256(
+    concat([
+      abi.encode(["uint32"], [sourceDomain]),
+      getBytes(txHash),
+      abi.encode(["uint256"], [BigInt(eventIndex)]),
+    ]),
+  ) as `0x${string}`;
+}
+```
+
+`eventIndex` is the log index of the `DepositedToRemote` event within the transaction's logs. Run it once the receipt is available and you can predict the bridge-side nullifier even before Circle returns the attestation — useful for de-duplicating your own job queues.
+
+---
+
+## 5. Fetching the Circle Attestation
+
+### 5.1 Endpoints
+
+There are two ways to fetch an attestation:
+
+```
+# Canonical -- keyed on the locally-computed messageHash (§4.5):
+GET {base}/v1/attestations/{messageHash}
+
+# Alternative -- look up by the source-chain transaction hash:
+GET {base}/v1/attestations?txHash={sourceTxHash}
+```
+
+Where `{base}` is one of:
+
+- Testnet: `https://xreserve-api-testnet.circle.com`
+- Mainnet: `https://xreserve-api.circle.com`
+
+`{messageHash}` is the hex string from [§4.5](#45-computing-messagehash-and-the-canonical-payload-locally), lower-cased. The leading `0x` is accepted.
+
+Prefer the `messageHash` form: a single source transaction can carry multiple xReserve deposits, and the `messageHash` is what unambiguously identifies one. Use the `txHash` form only when you know there is exactly one deposit in the transaction.
+
+### 5.2 Response shape
+
+When the attestation is ready:
+
+```json
+{
+  "attestation": {
+    "payload":     "0x5a2e0acd0000000100000000000000...",
+    "messageHash": "0xf1b524339dab4f1e9d4db66ebaf30dbedf624dec967fa2d9c51c95d194b81817",
+    "attestation": "0x54eb3db92440a3b7b3951428119896b21c35a8bbb120f5c8f8eb772f318edab26bb5fa6f8cc4c8d53b3a8c06bfc4fb12c7610fd2b758a14a93c94ccd009d6f8d1c"
+  }
+}
+```
+
+- `attestation.payload` — the full 305-byte deposit payload. Identical to what you reconstructed in [§3.4](#34-recovering-the-payload-locally-before-circle-returns-it).
+- `attestation.messageHash` — echoes the messageHash you queried.
+- `attestation.attestation` — the 65-byte ECDSA signature (`r || s || v`), hex-encoded.
+
+### 5.3 Pending / error states
+
+| HTTP status | Meaning | Recommended action |
+| --- | --- | --- |
+| `200` | Attestation ready (see [§5.2](#52-response-shape)) | Proceed to the Aleo leg |
+| `404` | Message not yet indexed | Retry — typically 5–15 minutes for testnet after source-chain finality |
+| `5xx` | Transient backend error | Retry with backoff |
+| Other `4xx` | Bad request (malformed `messageHash` etc.) | Do not retry — fix the request |
+
+### 5.4 `curl` example
+
+```bash
+curl -s "https://xreserve-api-testnet.circle.com/v1/attestations/${MESSAGE_HASH}" \
+  | jq .
+
+# Until it's ready you'll see HTTP 404:
+#   {"success":false,"message":"Attestation for message hash 0x.... is pending or not available."}
+```
+
+---
+
+## 6. Bridge V2 — `usdcx_bridge_v2.aleo`
+
+> Mainnet: `usdcx_bridge_v2.aleo`. Testnet: `test_usdcx_bridge_v2.aleo`. The transitions below are shown with the testnet stablecoin program (`test_usdcx_stablecoin.aleo`); on mainnet the bridge calls `usdcx_stablecoin.aleo` with identical semantics.
+
+### 6.1 Mappings
+
+| Mapping | Type | Purpose |
+| --- | --- | --- |
+| `nullifier` | `[u8; 32] -> bool` | Set of consumed deposit nonces (replay protection). |
+| `paused` | `bool -> bool` | Global pause switch. |
+| `circle_attesters` | `[u8; 32] -> [u8; 20]` | Per-local-token Circle attester keys, keyed on `local_token` (`payload[108..140]`). Each source-chain USDC contract can be signed by a distinct attester — this is what enables ARC support. |
+
+### 6.2 Transitions
+
+#### `fn mint_record(public deposit_input: [u8;305], public sig: [u8;65], public digest: [u8;32], receiver_merkle_proofs: [MerkleProof;2]) -> (ComplianceRecord, Token, Final)`
+
+Mints a private USDCx record to the recipient encoded in `deposit_input`.
+
+- Requires `payload[240] == 1` (`FLAG_BYTE_MINT_RECORD`).
+- Verifies the payload invariants (magic, version, domain, amount, non-zero local token / recipient) and `keccak256(payload) == digest`.
+- Proves Merkle non-inclusion of the recipient against the freeze list (two adjacent proofs).
+- Calls `test_usdcx_stablecoin.aleo::mint_private(recipient, amount)`.
+- Finalizer: re-checks pause, validates the freeze-list root against the current or previous root (within `block_height_window`), looks up `circle_attesters[local_token]`, verifies ECDSA, checks/sets the nullifier, and also asserts the same nonce was not consumed on the legacy V1 bridge.
+
+Returns a `ComplianceRecord` (for Circle audit) and a USDCx `Token` record (the actual minted balance).
+
+> The `receiver_merkle_proofs` argument is the freeze-list non-inclusion proof for the recipient. The Aleo courtesy backend ([§2.5](#25-aleo-courtesy-backend-mintburn-history--auto-execution)) auto-executes `mint_record` whenever it sees a deposit with hook flag = 1 and builds this proof for you. You can also build it yourself: the Aleo explorer exposes the tree at `GET {explorerBase}/{network}/programs/{freezelistProgram}/compliance/freeze-list` (returns a `string[]` of the tree leaves), and the Provable SDK's `SealanceMerkleTree` class produces the two-proof exclusion proof in exactly the format `mint_record` accepts.
+
+#### `fn mint_public(public deposit_input: [u8;305], public sig: [u8;65], public digest: [u8;32]) -> (address, u128, Final)`
+
+- Verifies the payload invariants and digest first.
+- Then dispatches on `payload[240]`:
+  - **flag = 0:** Public mint to anyone. Asserts the recipient is **not** the wrapper program's address and that `self.caller` is **not** the wrapper.
+  - **flag = 2:** Shielded mint. Asserts the recipient **is** the wrapper program's address *and* that `self.caller` is the wrapper. Combined with the wrapper's check that the BHP256 commitment matches the real recipient, this is what makes the shielded flow well-formed.
+  - **any other value:** `assert(false)`.
+- Calls `test_usdcx_stablecoin.aleo::mint_public(recipient, amount)`.
+- Finalizer mirrors `mint_record` (without the Merkle root check, since the recipient is public): re-checks pause, freeze-list membership via the plain mapping, per-token attester ECDSA verification, nullifier check/set (including the legacy V1 nullifier check).
+
+#### `fn burn_public(public amount: u128, public native_domain: u32, public native_recipient: [u8; 32]) -> Final`
+
+Burns `amount` public USDCx from `self.caller` and emits a burn message to `native_recipient` on `native_domain`.
+
+- Asserts `native_domain` is `0` (Ethereum) or `26` (ARC).
+- Calls `test_usdcx_stablecoin.aleo::burn_public(self.caller, amount)`.
+- Finalizer enforces: `paused == false`, `amount >= minimum_burn_amount`, `amount <= maximum_burn_amount`, `self.caller` not on the freeze list.
+
+:::warning
+⚠️ **Serialize `native_recipient` correctly or risk unrecoverable funds.** `native_recipient` is an `[u8; 32]` — 12 zero bytes of left padding followed by the 20 bytes of the destination EVM address ([§14](#14-appendix-d--address--hex--leo-array-conversion)). The program only checks the domain, **not** the recipient bytes: a burn with a malformed, mis-padded, or byte-swapped array is accepted on chain, the USDCx is destroyed, and Circle releases the USDC to whatever address the bytes decode to. There is no admin override or refund path. Use the `ethAddressToAleoArray` helper in [§14](#14-appendix-d--address--hex--leo-array-conversion) to build the array, and on mainnet, consider validating with a small test burn first.
+:::
+
+#### `fn burn_public_as_signer(public amount, public native_domain, public native_recipient) -> Final`
+
+Identical to `burn_public`, but burns from `self.signer` instead of `self.caller`. Use this when the burn must be charged to the originating wallet even though the call goes through another program. The same checks apply.
+
+### 6.3 Freeze list
+
+Both root checks are against `freezelist_program.aleo`:
+
+- `freeze_list_root.get(CURRENT_FREEZE_LIST_ROOT_INDEX)` — currently authoritative root.
+- `freeze_list_root.get(PREVIOUS_FREEZE_LIST_ROOT_INDEX)` — previous root, valid for `block_height_window.get(BLOCK_HEIGHT_WINDOW_INDEX)` blocks after the update tracked in `root_updated_height.get(ROOT_UPDATED_HEIGHT_INDEX)`. This is the grace window during which proofs against the old root are still accepted.
+
+Private mints (`mint_record`) prove non-inclusion by supplying **two adjacent Merkle proofs** (the proofs of the leaves immediately below and above the recipient address in the sorted Merkle tree). Public mints just check `freeze_list.get_or_use(recipient, false) == false`.
+
+### 6.4 Nullifier semantics
+
+The 32-byte `nonce` from `payload[204..236]` is the nullifier. On every mint, V2 asserts it's not in `nullifier` and then sets it — and additionally asserts the same nonce was never consumed on the legacy V1 bridge. Two different attestations with the same nonce cannot both be minted.
+
+### 6.5 Burn destination domain whitelist
+
+V2 only allows two burn destinations:
+
+- `0` — Ethereum/Sepolia
+- `26` — ARC
+
+Burns whose `native_domain` is anything else fail at the assert. Remember that these are **domains**, not EVM chain IDs ([§2.6](#26-protocol-constants)).
+
+---
+
+## 7. Shielded Wrapper — `shielded_usdcx_wrapper.aleo`
+
+### 7.1 Purpose
+
+The wrapper provides a "shielded mint" path that yields a **private record** in the user's wallet, without requiring the caller to provide a freeze-list Merkle non-inclusion proof at mint time.
+
+It does that by funnelling the mint through three steps inside a single Aleo transaction:
+
+1. Circle attests over a payload whose recipient is *the wrapper program's address* and whose hook data carries a BHP256 commitment to the real recipient.
+2. The wrapper's `private_mint` calls the V2 bridge's `mint_public` with flag byte 2 — V2 lets this through because the recipient and the caller are both the wrapper.
+3. The wrapper then calls the stablecoin program's `transfer_public_to_private(real_recipient, amount)`, which yields a private USDCx `Token` record to the real recipient.
+
+The wrapper's `private_burn` is the symmetric flow (`transfer_private_to_public` → `bridge_v2::burn_public`).
+
+### 7.2 Why it exists
+
+`mint_record` is the obvious "mint a private record" path, but it reveals the recipient on the source chain (in the `remoteRecipient` field).
+
+The shielded wrapper sidesteps this by public-minting to itself and then immediately transferring those public tokens privately to the real recipient via `transfer_public_to_private`.
+
+### 7.3 Transitions
+
+#### `fn private_mint(payload: [u8;305], sig: [u8;65], hash: [u8;32], secret_nonce: scalar, recipient: address) -> (Token, Final)`
+
+- Extracts the 32 hook-data bytes at `payload[241..273]`.
+- Recomputes `BHP256::commit_to_field(recipient, secret_nonce)` and asserts the 32 bytes match. This binds the attestation to the *real* recipient.
+- Calls the V2 bridge's `mint_public(payload, sig, hash)`, which mints `amount` to the wrapper's own address (flag byte 2 is enforced by V2; see [§6.2](#62-transitions)).
+- Calls the stablecoin program's `transfer_public_to_private(recipient, amount)` to move those public tokens out as a private record for the user.
+
+Returns the freshly minted `Token` record to the caller. Pass the **same** `secret_nonce` and `recipient` you used to build the commitment in the hook data.
+
+#### `fn private_burn(user_record: Token, amount: u128, native_domain: u32, native_recipient: [u8;32], merkle_proof: [MerkleProof;2]) -> Final`
+
+- Calls `transfer_private_to_public(self.address, amount, user_record, merkle_proof)` — burns the user's private record into the wrapper's public balance.
+- Calls the V2 bridge's `burn_public(amount, native_domain, native_recipient)` — burns the wrapper's public balance via V2.
+
+The Merkle proof here is the freeze-list non-inclusion proof for the **wrapper's own address**. The user record itself stays private.
+
+The same `native_recipient` serialization warning from [§6.2](#62-transitions) applies here: the array must be 12 zero bytes + the 20 EVM address bytes, built with the [§14](#14-appendix-d--address--hex--leo-array-conversion) helper — an invalid array burns the record with no way to recover the funds.
+
+### 7.4 The `secret_nonce` explained
+
+The wrapper's purpose is to mint a private record to *somebody*, decided at execution time. The Circle attestation is over a payload whose `remote_recipient` is the wrapper program (so V2 will accept it). The "who the wrapper should hand the record to" piece is encoded by stuffing a **binding commitment** to the real recipient into the hook data:
+
+```
+hookData[0]      = 0x02                          (flag byte: "shielded mint via wrapper")
+hookData[1..33]  = BHP256::commit_to_field(recipient, secret_nonce).to_bytes_le()
+hookData[33..65] = 0x00 * 32                     (reserved)
+```
+
+At execution time, the integrator passes `(recipient, secret_nonce)` to `private_mint`; the wrapper recomputes the BHP256 commitment from those inputs and asserts it equals `hookData[1..33]`. Because BHP256 commitments are hiding *and* binding:
+
+- The on-chain payload reveals nothing about who the real recipient is (hiding) — anyone watching the Circle attestation only sees the commitment.
+- No one can substitute a different recipient or nonce without invalidating the wrapper's assert (binding).
+
+#### What value to use for the nonce?
+
+You have a choice here, with a tradeoff between **privacy** and **recoverability**. The wrapper itself accepts any `Scalar` value — it just recomputes the commitment from whatever `(recipient, secret_nonce)` you pass to `private_mint` and asserts it matches `hookData[1..33]`.
+
+**Option A — constant nonce (`0scalar`, etc).**
+
+- The commitment becomes a pure function of `recipient` (`BHP256::commit_to_field(recipient, 0scalar)`).
+- Recovery is trivial: anyone who knows the recipient can rebuild the hook data and submit `private_mint` — including a wallet that just reconnects after a browser refresh, or a backend that picks up an orphaned deposit days later. There is no extra secret to lose.
+- **Cost: linkability.** Anyone watching xReserve who has a *guess* at who the recipient is can recompute the commitment from that guess and confirm or refute it. And the same recipient produces the same commitment every time, so an observer can cluster all of that recipient's shielded deposits together by commitment alone. The recipient still isn't named on chain, but the commitment behaves like a pseudonym tied to them.
+
+**Option B — fresh random nonce per deposit.**
+
+- Generate a random `Scalar` at the moment you build the hookData, before submitting `depositToRemote`. Store `(messageHash, secret_nonce)` somewhere durable on your side.
+- Recovery requires that scalar. When you call `private_mint`, you pass the exact same `Scalar` you used to build the commitment. **Lose it and the funds are stuck:** the wrapper's BHP256 assert will fail for any other value, the USDC sits in xReserve custody on the source chain forever, and there is no admin override or recovery path. The Circle attestation is also single-use — the deposit's nullifier ([§6.4](#64-nullifier-semantics)) will be consumed on the first attempted mint, so you can't deposit the same payload again.
+- **Benefit: full hiding.** The commitment for each deposit looks like random 32 bytes independent of all other commitments. A passive observer can't link your deposits to each other, can't confirm a guessed recipient, and learns nothing from the on-chain trace beyond "some shielded deposit happened."
+
+### 7.5 The wrapper's Aleo address
+
+Programs on Aleo also have a derived account address. The wrapper's address is what you supply as `remoteRecipient` to `depositToRemote` for any shielded mint. It is the **same on mainnet and testnet** (the program ID is identical on both networks):
+
+```
+shielded_usdcx_wrapper.aleo
+   -> Address.fromProgramId(...)
+aleo183r3zgsr57fwtgk5duzeq9kqdkpmmtfj4k5469ddvm3tcfhhls9szktw82
+   -> bech32m decode (see §14)
+0x3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b
+```
+
+See [§8.2](#82-compute-the-wrappers-aleo-address-from-its-program-id) for the JS SDK call.
+
+---
+
+## 8. Provable JS SDK Reference for Shielded Operations
+
+The shielded wrapper requires constructing a 32-byte BHP256 commitment off-chain. The Provable JS SDK exposes exactly the primitives you need.
+
+### 8.1 Install / load
+
+```bash
+npm install @provablehq/sdk
+# or
+pnpm add @provablehq/sdk
+```
+
+```js
+import { BHP256, Plaintext, Scalar, Address } from "@provablehq/sdk";
+// or the dynamic loader (lazy, network-aware):
+import { loadNetwork } from "@provablehq/sdk/dynamic.js";
+const sdk = await loadNetwork("testnet"); // or "mainnet"
+// then use sdk.BHP256, sdk.Plaintext, sdk.Scalar, sdk.Address
+```
+
+The dynamic loader lazily fetches the network-specific WASM artifacts and is useful when the network can change at runtime; for Node scripts the direct import is simpler.
+
+### 8.2 Compute the wrapper's Aleo address from its program ID
+
+```js
+import { Address } from "@provablehq/sdk";
+
+const wrapperAddress = Address.fromProgramId("shielded_usdcx_wrapper.aleo")
+                              .to_string();
+// -> "aleo183r3zgsr57fwtgk5duzeq9kqdkpmmtfj4k5469ddvm3tcfhhls9szktw82"
+```
+
+This is what you pass as `remoteRecipient` to `depositToRemote` for shielded mints (same address on both networks).
+
+### 8.3 Compute the BHP256 hook commitment
+
+```js
+import { BHP256, Plaintext, Scalar } from "@provablehq/sdk";
+
+const recipient   = "aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze";
+const secretNonce = "0scalar";    // see §7.4 for guidance
+
+const recipientBits = Plaintext.fromString(recipient).toBitsLe();
+const secret        = Scalar.fromString(secretNonce);
+
+const committedField = new BHP256().commit(recipientBits, secret);
+const committedBytes = committedField.toBytesLe(); // 32 bytes
+```
+
+### 8.4 Assemble the 65-byte hook data
+
+```js
+const HOOK_LEN = 65;
+const FLAG_SHIELDED = 0x02;
+
+const hookData = new Uint8Array(HOOK_LEN);
+hookData[0] = FLAG_SHIELDED;
+hookData.set(committedBytes, 1);
+// bytes [33..65] stay zero
+```
+
+### 8.5 Convert hex → Leo array literal
+
+`leo execute` consumes byte arrays as the literal `[N1u8,N2u8,...]`. To turn the hex strings Circle returns into that shape:
+
+```js
+function hexToAleoBytes(hex /* "0x..." */) {
+  const clean = hex.replace(/^0x/, "");
+  const out   = [];
+  for (let i = 0; i < clean.length; i += 2) {
+    out.push(`${parseInt(clean.slice(i, i + 2), 16)}u8`);
+  }
+  return `[${out.join(",")}]`;
+}
+```
+
+### 8.6 Complete Node example
+
+A self-contained Node script that produces the 65-byte shielded hook data:
+
+```js
+import { BHP256, Plaintext, Scalar } from "@provablehq/sdk";
+
+const RECIPIENT    = "aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze";
+const SECRET_NONCE = "0scalar";
+
+function generateHookData(recipientAddress, secretNonce) {
+  const recipientBits  = Plaintext.fromString(recipientAddress).toBitsLe();
+  const secret         = Scalar.fromString(secretNonce);
+  const committedField = new BHP256().commit(recipientBits, secret);
+  const committedBytes = committedField.toBytesLe();   // 32 bytes
+
+  const hookData = new Uint8Array(65);
+  hookData[0] = 2;                     // flag = shielded
+  hookData.set(committedBytes, 1);     // commitment at [1..33]
+  // bytes [33..65] stay zeroed
+  return hookData;
+}
+
+const hookData = generateHookData(RECIPIENT, SECRET_NONCE);
+
+console.log("hookData bytes:",
+  `[${[...hookData].map(b => `${b}u8`).join(", ")}]`);
+console.log("hookData hex:",
+  `0x${Buffer.from(hookData).toString("hex")}`);
+```
+
+Save it as a `.js` file and run it with `node`. The hex output goes into `depositToRemote`'s `hookData` argument; the Aleo array literal goes into the `leo execute` invocation of `private_mint` if you ever want to dry-run it locally.
+
+### 8.7 Browser / multi-network variant
+
+If your code path can run against either testnet or mainnet, use the dynamic loader instead of the direct import. It lazily fetches the network-specific WASM artifacts and exposes the same SDK surface:
+
+```ts
+import { loadNetwork } from "@provablehq/sdk/dynamic.js";
+
+const sdkPromise = loadNetwork(isMainnet ? "mainnet" : "testnet");
+
+export const buildExternalPrivateMintHookData = async (recipient: string) => {
+  const sdk            = await sdkPromise;
+  const recipientBits  = sdk.Plaintext.fromString(recipient).toBitsLe();
+  const secret         = sdk.Scalar.zero();              // 0scalar
+  const committedField = new sdk.BHP256().commit(recipientBits, secret);
+  const committedBytes = committedField.toBytesLe();
+
+  const hookData = new Uint8Array(65);
+  hookData[0] = 2;
+  hookData.set(committedBytes, 1);
+  return hookData;
+};
+
+export const programIdToAleoAddress = async (programId: string) => {
+  const sdk = await sdkPromise;
+  return sdk.Address.fromProgramId(programId.trim()).to_string();
+};
+
+// Build the array of inputs ready to hand to a wallet adapter:
+export const buildExternalPrivateMintInputs = ({
+  payload, attestation, messageHash, recipientAleo,
+}) => [
+  hexToAleoBytes(payload),
+  hexToAleoBytes(attestation),
+  hexToAleoBytes(messageHash),
+  "0scalar",       // matches the SDK call above
+  recipientAleo,
+];
+```
+
+---
+
+## 9. End-to-End Worked Examples
+
+The examples below run Sepolia → Aleo testnet. For mainnet, substitute the mainnet program IDs, contract addresses, and endpoints from [§2](#2-networks-program-names-and-endpoints) — the flow is identical.
+
+### 9.1 Public mint: Ethereum → Aleo
+
+**Inputs.** 5 USDC public mint to `aleo1...recipient`. Sepolia EOA already holds USDC.
+
+1. Convert the Aleo recipient to `bytes32` ([§14](#14-appendix-d--address--hex--leo-array-conversion) shows the bech32m decode in JS).
+
+2. Approve and deposit (cast, see [§4.3](#43-cast-example--public-mint-deposit)). Use a 65-byte zero `hookData`.
+
+3. Reconstruct the canonical payload locally from `DepositedToRemote` + the derived nonce + the [§2.6](#26-protocol-constants) constants, then compute `messageHash = keccak256(payload)` ([§4.5](#45-computing-messagehash-and-the-canonical-payload-locally)).
+
+4. Poll Circle until the attestation is ready:
+
+   ```bash
+   curl -s "https://xreserve-api-testnet.circle.com/v1/attestations/${MESSAGE_HASH}" | jq .
+   ```
+
+5. On the standard path you're done — the courtesy backend ([§2.5](#25-aleo-courtesy-backend-mintburn-history--auto-execution)) sees the flag-0 deposit and executes `mint_public` for you. To execute manually instead, convert `payload`, `attestation`, and `messageHash` into Leo array literals ([§8.5](#85-convert-hex--leo-array-literal)), then call V2 yourself:
+
+   ```bash
+   leo execute --broadcast --yes \
+     --network testnet \
+     --endpoint https://api.explorer.provable.com/v1 \
+     --path /path/to/bridge_v2 \
+     test_usdcx_bridge_v2.aleo/mint_public \
+     "$PAYLOAD_AS_LEO_ARRAY" \
+     "$ATTESTATION_AS_LEO_ARRAY" \
+     "$MESSAGE_HASH_AS_LEO_ARRAY"
+   ```
+
+The recipient receives `5_000_000u128` USDCx in their public balance on the stablecoin program.
+
+### 9.2 Shielded mint: Ethereum → Aleo (via wrapper)
+
+**Inputs.** 5 USDC shielded mint with the real recipient `aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze`.
+
+1. Compute the wrapper's Aleo address ([§8.2](#82-compute-the-wrappers-aleo-address-from-its-program-id)), then `bytes32`-encode it:
+
+   ```
+   wrapperAleo    = aleo183r3zgsr57fwtgk5duzeq9kqdkpmmtfj4k5469ddvm3tcfhhls9szktw82
+   wrapperBytes32 = 0x3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b
+   ```
+
+2. Build the hook data via the Node example in [§8.6](#86-complete-node-example) with the **real recipient** (not the wrapper address) and `secret_nonce = 0scalar`:
+
+   ```
+   hookDataHex = 0x02<32-byte BHP256 commitment>00000000...(32 zero bytes)
+   ```
+
+   For the sample recipient `aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze` with `secret_nonce = 0scalar`, the exact bytes are:
+
+   ```
+   0x024d2789e2802bdf53eece01292ffcc9db2cfff37400c15418567ef2e351a5a60a0000000000000000000000000000000000000000000000000000000000000000
+   ```
+
+3. Approve and deposit. Pay attention to the `remoteRecipient`:
+
+   ```bash
+   cast send "$XRESERVE" \
+     "depositToRemote(uint256,uint32,bytes32,address,uint256,bytes)" \
+     5000000 10002 \
+     0x3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b \
+     "$USDC" 100000 \
+     "$hookDataHex" \
+     --private-key "$PRIVATE_KEY" --rpc-url "$RPC_URL"
+   ```
+
+4. Reconstruct the payload locally from `DepositedToRemote` + the derived nonce + the [§2.6](#26-protocol-constants) constants, compute `messageHash = keccak256(payload)` ([§4.5](#45-computing-messagehash-and-the-canonical-payload-locally)), then poll Circle ([§5.4](#54-curl-example)).
+
+5. Call the wrapper — this step is **always yours to execute** (the backend can't, since only you hold the `secret_nonce`):
+
+   ```bash
+   leo execute --broadcast --yes \
+     --network testnet \
+     --endpoint https://api.explorer.provable.com/v1 \
+     --path /path/to/shielded_usdcx_wrapper \
+     private_mint \
+     "$PAYLOAD_AS_LEO_ARRAY" \
+     "$ATTESTATION_AS_LEO_ARRAY" \
+     "$MESSAGE_HASH_AS_LEO_ARRAY" \
+     0scalar \
+     aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze
+   ```
+
+The real recipient receives `5_000_000u128` as a private USDCx `Token` record. The on-chain trace of the mint only ever names the wrapper (publicly); the real recipient is bound only through the BHP256 commitment in the hook data.
+
+> Note: this transaction sends a fee from whoever calls `private_mint`, but the call does **not** consume any USDCx. The fee payer (Aleo wallet) can be different from the recipient — and typically should be, otherwise observers would learn the recipient from the fee-paying account.
+
+---
+
+## 10. Migrating from V1
+
+V1 (`usdcx_bridge.aleo` on mainnet, `test_usdcx_bridge.aleo` on testnet) is deprecated. It keeps running on mainnet until the announced deprecation date, so you can migrate without downtime — but do not start any new integration against it.
+
+Recommended path: validate against V2 on testnet first, then cut over on mainnet.
+
+Everything upstream of the payload's trailing bytes is unchanged: `depositToRemote`, the `DepositedToRemote` event, the Circle attestation API, the nonce derivation, and the leading 236 payload bytes (magic, version, amount, domains, recipient, tokens, depositor, max_fee, nonce) are identical between V1 and V2. Only the five items below change:
+
+1. **Swap the program ID.**
+
+   ```
+   mainnet:   usdcx_bridge.aleo       ->  usdcx_bridge_v2.aleo
+   testnet:   test_usdcx_bridge.aleo  ->  test_usdcx_bridge_v2.aleo
+   ```
+
+   Also add the shielded wrapper (`shielded_usdcx_wrapper.aleo`, same ID on both networks) if you want shielded mints.
+
+2. **Extend the payload: 240 → 305 bytes.** Append `hook_data_len = 0x00000041` (4 bytes, always 65) at offset 236, followed by the 65-byte `hook_data` at offset 240 ([§3.1](#31-the-305-byte-payload)).
+
+3. **Put the mint type in `hookData[0]`.** V1 selected the mint mode via `POST /api/mint-execution-requests` to the courtesy backend; that endpoint has no V2 equivalent — the flag byte replaces it ([§3.2](#32-the-65-byte-hook-data--flag-byte-semantics)). Remove the POST from your flow.
+
+4. **Update the transitions you (or the backend) call.** For flags 0/1 the backend makes the Aleo call for you:
+
+   ```
+   flag 0   mint_public([u8;240], ...)  ->  mint_public([u8;305], ...)
+   flag 1   mint_private(...)           ->  mint_record([u8;305], ..., [MerkleProof;2])
+   flag 2   (new)                       ->  shielded_usdcx_wrapper.aleo/private_mint(...)
+   ```
+
+   (`...` = `sig: [u8;65], digest: [u8;32]`, unchanged; `digest = messageHash`.)
+
+5. **Check burn destinations.** V1 supported Ethereum only; V2 whitelists Ethereum (`0`) and ARC (`26`), and any other `native_domain` fails.
+
+Additionally, consider whether any of your `mint_record` (formerly `mint_private`) flows should move to the shielded wrapper (flag 2): it also delivers a private record, but without exposing the final Aleo recipient on the source chain ([§1.4](#14-privacy-at-a-glance)).
+
+Note that V2's nullifier check spans both bridges — a nonce consumed on V1 can never be minted again on V2 ([§6.4](#64-nullifier-semantics)), so there is no double-redemption window during migration.
+
+---
+
+## 11. Appendix A — Constants Cheat Sheet
+
+```
+MAGIC_VALUE             = 0x5a2e0acd
+SUPPORTED_VERSION       = 0x00000001
+DOMAIN (Aleo)           = 10002      = 0x00002712
+ETH_DESTINATION_DOMAIN  = 0          (Ethereum)
+ARC_DESTINATION_DOMAIN  = 26         (!= ARC chain IDs: 5042 mainnet / 5042002 testnet)
+HOOK_DATA_LENGTH        = 65         (bytes; payload[236..240] = 0x00000041)
+PAYLOAD_LENGTH          = 305 bytes
+
+FLAG_BYTE_MINT_PUBLIC   = 0
+FLAG_BYTE_MINT_RECORD   = 1
+FLAG_BYTE_MINT_SHIELDED = 2
+
+Wrapper address (same on testnet and mainnet) =
+  aleo183r3zgsr57fwtgk5duzeq9kqdkpmmtfj4k5469ddvm3tcfhhls9szktw82
+  (bytes32)
+  0x3c47112203a792e5a2d46f059016c06d83bdad32ada95d15ad66e2bc26f7fc0b
+```
+
+---
+
+## 12. Appendix B — Payload Byte Map
+
+```
+offset     size  field (305 bytes total)
+---------  ----  ----------------------------------------------
+[0..3]      4    magic = 0x5a2e0acd
+[4..7]      4    version = 0x00000001
+[8..23]     16   MUST be zero (enforced; top half of u256 amount)
+[24..39]    16   amount (u128 big-endian)
+[40..43]    4    remote_domain (10002)
+[44..75]    32   remote_token
+[76..107]   32   remote_recipient (= wrapper address for shielded)
+[108..139]  32   local_token
+[140..171]  32   localDepositor
+[172..203]  32   max_fee
+[204..235]  32   nonce        (see §4.6 for derivation)
+[236..239]  4    hook_data_len = 0x00000041 (65)
+[240..304]  65   hook_data (see Appendix C)
+```
+
+---
+
+## 13. Appendix C — Hook Data Layout Per Flag Byte
+
+```
+Flag = 0  (mint_public)
+  [240]      = 0x00
+  [241..305] = 0x00 * 64           (ignored; conventionally zero)
+
+Flag = 1  (mint_record)
+  [240]      = 0x01
+  [241..305] = 0x00 * 64           (ignored; conventionally zero)
+
+Flag = 2  (shielded mint via wrapper)
+  [240]      = 0x02
+  [241..273] = BHP256.commit(recipient, secret_nonce).to_bytes_le()   (32 bytes)
+  [273..305] = 0x00 * 32           (reserved)
+```
+
+---
+
+## 14. Appendix D — Address / Hex / Leo Array Conversion
+
+### Aleo address → bytes32
+
+```
+Aleo address (bech32m, "aleo1...", 63 chars)
+   -> bech32m.decode  -> 5-bit words
+   -> bech32m.fromWords -> 32 raw bytes
+   -> hex-encode -> 0x... (64 hex chars)
+
+bytes32 -> Aleo address: reverse (bech32m.toWords + encode("aleo")).
+```
+
+Reference JS:
+
+```js
+import { bech32m } from "bech32";
+
+function aleoAddressToBytes32(aleo) {
+  const decoded = bech32m.decode(aleo);
+  if (decoded.prefix !== "aleo") throw new Error("not an Aleo address");
+  const bytes = Uint8Array.from(bech32m.fromWords(decoded.words));
+  if (bytes.length !== 32) throw new Error("bad length");
+  return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+```
+
+### EVM address → 32-byte Aleo `[u8; 32]`
+
+`burn_public`'s `native_recipient` is an `[u8; 32]`, left-padded with 12 zero bytes. Getting this wrong sends the released USDC to an unrecoverable address (see the warning in [§6.2](#62-transitions)) — use this helper rather than assembling the array by hand. JS:
+
+```js
+function ethAddressToAleoArray(eth) {
+  const hex = eth.toLowerCase().replace(/^0x/, "");
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  const padded = [...Array(12).fill(0), ...bytes]; // 12 zero bytes + 20 address bytes
+  return `[${padded.map(b => `${b}u8`).join(",")}]`;
+}
+```
+
+### Hex → Leo `[u8; N]` array literal
+
+For `payload`, `attestation`, `messageHash`:
+
+```js
+function hexToAleoBytes(hex /* "0x..." */) {
+  const clean = hex.replace(/^0x/, "");
+  const out = [];
+  for (let i = 0; i < clean.length; i += 2) {
+    out.push(`${parseInt(clean.slice(i, i + 2), 16)}u8`);
+  }
+  return `[${out.join(",")}]`;
+}
+```
+
+:::note
+Use the *compact* form (no spaces) when handing the literal to a wallet adapter — some adapters mis-parse arrays with whitespace.
+:::
