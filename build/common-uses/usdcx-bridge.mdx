@@ -137,20 +137,51 @@ This manual focuses on the **Aleo programs** themselves (interface, payload form
 
 ### 1.2 High-level flows
 
-**Mint (EVM → Aleo)**
+```
+                                MINT (EVM -> Aleo)
+  +----------+  depositToRemote()  +--------------+
+  |   User   | -------------------> |  xReserve    |  emits DepositedToRemote;
+  +----------+                     | (EVM chain)  |  takes custody of USDC
+                                   +------+-------+
+                                          | (Circle observes the deposit)
+                                          v
+                                   +--------------+
+                                   | Circle attn  |  builds payload bytes,
+                                   | service      |  signs them -> attestation
+                                   +------+-------+
+                                          | GET /v1/attestations/{messageHash}
+                                          v
+                                   +--------------------+
+                                   | Mint executor:      |   public mint or mint_record:
+                                   |  - courtesy backend |     courtesy backend (default)
+                                   |    (default path)   |
+                                   |  - the user         |   shielded wrapper mint:
+                                   |    (shielded only)  |     the user (mandatory)
+                                   +------+--------------+
+                                          | leo execute mint_public / mint_record /
+                                          |             shielded_wrapper.private_mint
+                                          v
+                                   +--------------+
+                                   | Bridge prog. |  verifies sig, freeze list,
+                                   | on Aleo      |  nullifier -> mints USDCx
+                                   +--------------+
 
-1. User calls `depositToRemote()` on xReserve (EVM chain) — xReserve emits `DepositedToRemote` and takes custody of the USDC.
-2. Circle observes the deposit, builds the payload bytes, and signs them — producing an attestation, fetched via `GET /v1/attestations/{messageHash}`.
-3. The mint is executed on Aleo:
-   - Flag 0/1 (public mint or `mint_record`): the courtesy backend executes it automatically (default path).
-   - Flag 2 (shielded wrapper mint): the user must execute it — only they hold the `secret_nonce`.
-4. The bridge program on Aleo verifies the signature, checks the freeze list and nullifier, then mints USDCx.
 
-**Burn (Aleo → EVM)**
-
-1. User calls `burn_public()` on the Aleo bridge program — it burns the USDCx and emits a burn message.
-2. Circle's attestation service signs the burn message.
-3. xReserve on the EVM chain releases USDC to `native_recipient`.
+                                BURN (Aleo -> EVM)
+  +----------+  burn_public()  +--------------+
+  |   User   | ----------------> | Bridge prog. |  burns USDCx, emits message
+  +----------+                  +------+-------+
+                                       |
+                                       v
+                                +--------------+
+                                | Circle attn  |  signs burn message
+                                +------+-------+
+                                       v
+                                +--------------+
+                                | xReserve     |  Circle releases USDC to native_recipient
+                                | on EVM       |
+                                +--------------+
+```
 
 ### 1.3 The two programs at a glance
 
@@ -171,7 +202,7 @@ This manual focuses on the **Aleo programs** themselves (interface, payload form
 | --- | --- | --- | --- |
 | `mint_public` (flag 0) | Yes | Yes (it's in `remoteRecipient`) | Public USDCx balance |
 | `mint_record` (flag 1) | Yes | Yes (it's in `remoteRecipient`) | Private USDCx record |
-| Shielded wrapper mint (flag 2) | Yes | **No** (`remoteRecipient` is the wrapper; real recipient is only inside the BHP256 commitment) | Private USDCx record |
+| Shielded wrapper mint (flag 2) | Yes | **No** (`remoteRecipient` is the wrapper; the real recipient is supplied as a private input to the wrapper's `private_mint` and is bound by a BHP256 commitment only the sender can open) | Private USDCx record |
 
 `mint_record` hides the recipient *on the Aleo side*, but the final Aleo recipient is still in the source-chain xReserve deposit. Only the shielded wrapper avoids putting the real Aleo recipient directly on the source chain.
 
@@ -186,7 +217,7 @@ This manual focuses on the **Aleo programs** themselves (interface, payload form
 - **`mint_public` vs `mint_record` vs shielded mint.** Three distinct delivery shapes for the minted USDCx:
   - `mint_public` — mints into the public balance mapping of the stablecoin program. Recipient address is public.
   - `mint_record` — mints a private USDCx record (a UTXO-like ciphertext) directly to the recipient address. Caller must also supply a Merkle non-inclusion proof against the freeze list.
-  - Shielded mint — a public mint into the wrapper program's address, immediately followed (inside the wrapper) by a `transfer_public_to_private` to the real recipient. Distinct from `mint_record` because it doesn't need a Merkle proof at mint time (the wrapper resolves the recipient from a BHP256 commitment carried in the hook data instead).
+  - Shielded mint — a public mint into the wrapper program's address, immediately followed (inside the wrapper) by a `transfer_public_to_private` to the real recipient. Distinct from `mint_record` because it doesn't need a Merkle proof at mint time (the recipient is passed to the wrapper as a private input and verified against the BHP256 commitment carried in the hook data instead).
 - **Domain.** A CCTP-style 32-bit identifier for a chain. Ethereum = `0`, Aleo = `10002`, ARC = `26`. Note that a domain is **not** the same as an EVM chain ID (ARC's domain is 26; its chain IDs are 5042 mainnet / 5042002 testnet). See https://developers.circle.com/xreserve/references/supported-blockchains-and-domains
 
 ---
@@ -290,7 +321,7 @@ Base URLs:
 | Network | Backend base URL |
 | --- | --- |
 | Testnet | `https://api.usdcx.aleo.dev/api` |
-| Mainnet | `https://api.usdcx.aleo.dev/api` |
+| Mainnet | `https://api.usdcx.aleo.org/api` |
 
 #### `GET /api/mints?minterEthAddress={address}&evmChain={ethereum|arc}`
 
@@ -720,7 +751,7 @@ Returns the freshly minted `Token` record to the caller. Pass the **same** `secr
 - Calls `transfer_private_to_public(self.address, amount, user_record, merkle_proof)` — burns the user's private record into the wrapper's public balance.
 - Calls the V2 bridge's `burn_public(amount, native_domain, native_recipient)` — burns the wrapper's public balance via V2.
 
-The Merkle proof here is the freeze-list non-inclusion proof for the **wrapper's own address**. The user record itself stays private.
+The Merkle proof here is the freeze-list non-inclusion proof for the **sender** — i.e. the owner of `user_record` — not for the wrapper. `transfer_private_to_public` in the stablecoin program checks the sender against the freeze list ([source](https://github.com/ProvableHQ/compliant-stablecoin/blob/master/stablecoin_program/src/main.leo#L673)). As with `mint_record`, it takes the two adjacent proofs described in [§6.3](#63-freeze-list). The user record itself stays private.
 
 The same `native_recipient` serialization warning from [§6.2](#62-transitions) applies here: the array must be 12 zero bytes + the 20 EVM address bytes, built with the [§14](#14-appendix-d--address--hex--leo-array-conversion) helper — an invalid array burns the record with no way to recover the funds.
 
@@ -784,19 +815,19 @@ pnpm add @provablehq/sdk
 ```
 
 ```js
-import { BHP256, Plaintext, Scalar, Address } from "@provablehq/sdk/testnet.js"; // or "@provablehq/sdk/mainnet.js"
+import { BHP256, Plaintext, Scalar, Address } from "@provablehq/sdk";
 // or the dynamic loader (lazy, network-aware):
 import { loadNetwork } from "@provablehq/sdk/dynamic.js";
 const sdk = await loadNetwork("testnet"); // or "mainnet"
 // then use sdk.BHP256, sdk.Plaintext, sdk.Scalar, sdk.Address
 ```
 
-The dynamic loader lazily fetches the network-specific WASM artifacts and is useful when the network can change at runtime; for Node scripts the direct import is simpler. Always pick an explicit `/testnet.js` or `/mainnet.js` subpath for the direct import rather than the bare `@provablehq/sdk` — the bare specifier currently resolves to the testnet build, but that isn't obvious from the import line itself. See [Network Selection](../sdk/getting-started.mdx#network-selection) for details.
+The dynamic loader lazily fetches the network-specific WASM artifacts and is useful when the network can change at runtime; for Node scripts the direct import is simpler.
 
 ### 8.2 Compute the wrapper's Aleo address from its program ID
 
 ```js
-import { Address } from "@provablehq/sdk/testnet.js"; // or "@provablehq/sdk/mainnet.js"
+import { Address } from "@provablehq/sdk";
 
 const wrapperAddress = Address.fromProgramId("shielded_usdcx_wrapper.aleo")
                               .to_string();
@@ -808,7 +839,7 @@ This is what you pass as `remoteRecipient` to `depositToRemote` for shielded min
 ### 8.3 Compute the BHP256 hook commitment
 
 ```js
-import { BHP256, Plaintext, Scalar } from "@provablehq/sdk/testnet.js"; // or "@provablehq/sdk/mainnet.js"
+import { BHP256, Plaintext, Scalar } from "@provablehq/sdk";
 
 const recipient   = "aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze";
 const secretNonce = "0scalar";    // see §7.4 for guidance
@@ -852,7 +883,7 @@ function hexToAleoBytes(hex /* "0x..." */) {
 A self-contained Node script that produces the 65-byte shielded hook data:
 
 ```js
-import { BHP256, Plaintext, Scalar } from "@provablehq/sdk/testnet.js"; // or "@provablehq/sdk/mainnet.js"
+import { BHP256, Plaintext, Scalar } from "@provablehq/sdk";
 
 const RECIPIENT    = "aleo1r5fwayr4vhaz2mgyuqg7qer3apunn2zefe7m9cle94rar0dwcgyq6hg9ze";
 const SECRET_NONCE = "0scalar";
