@@ -5,6 +5,10 @@ sidebar_label: Querying the Network
 sidebar_position: 7
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../getting-started.mdx#network-selection) for details.
+:::
+
 Communication with the Aleo network is done through the `AleoNetworkClient` class. This class provides methods to query
 data from Aleo network nodes and submit transactions to the Aleo network.
 
@@ -14,7 +18,7 @@ Blocks are formed by Aleo validators and represent the canonical unit of state c
 The following Typescript snippet shows how to extract most of the important information from a block:
 
 ```typescript
-import { AleoNetworkClient } from "@provablehq/sdk"
+import { AleoNetworkClient } from "@provablehq/sdk/testnet.js"
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
 const block = await networkClient.getBlock(1);
@@ -78,7 +82,7 @@ After a program function relevant to an app has been executed, it is often usefu
 
 
 ```typescript
-import { AleoNetworkClient, Transition } from '@provablehq/sdk';
+import { AleoNetworkClient, Transition } from '@provablehq/sdk/testnet.js';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
 // Get a transaction by id and get its inputs and outputs from the JSON representation.
@@ -101,7 +105,7 @@ for (let i = 0; i < transitions.length; i++) {
 The `AleoNetworkClient` also provides a method for transaction information back in the format of a WASM object. The WASM representation will provide the raw snarkVM object, which has several convenience methods for extracting the objects such as inputs, outputs, and records without the need for traditional JSON parsing. The choice of representation is up to the developer's personal preference in ergonomics.
 
 ```typescript
-import { AleoNetworkClient, Transition } from '@provablehq/sdk';
+import { AleoNetworkClient, Transition } from '@provablehq/sdk/testnet.js';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
 // Get a transaction by id and get its inputs and outputs from the Wasm representation.
@@ -131,7 +135,7 @@ The public state of a program exists within its mappings. These mappings often c
 The list of mappings within a program can be queried using the getProgramMappingNames method of the AleoNetworkClient:
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 import { deepStrictEqual } from 'assert';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
@@ -155,7 +159,7 @@ deepStrictEqual(creditsMappings, expectedMappings);
 To get the value from a mapping, one must know the type of the mapping's keys. When this is known, the `getMappingValue()` method can be used:
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 import { strictEqual } from 'assert';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
@@ -169,7 +173,7 @@ strictEqual(account, expectedBalance);
 Often the returned value from a mapping will be a struct or array. When returned as a string, this can be difficult to parse. The `AleoNetworkClient` provides a method to return the value as a WASM object called a `Plaintext`, which has several convenience methods for inspecting the returned value. The `toObject()` method can be used to convert the WASM object to a JavaScript object:
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 import {deepStrictEqual} from 'assert';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
@@ -197,7 +201,7 @@ Apps often need to know information about a program's structure such as its sour
 To get the source code of a program, the `AleoNetworkClient` provides a method to query the program by its unique ID.
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
 // Get the source code of credits.aleo.
@@ -210,7 +214,7 @@ const token_registry = await networkClient.getProgram("token_registry.aleo");
 The snarkVM representation of a program can be queried from the Aleo network by its unique ID. The returned object representation has several convenience methods for extracting a list of program's functions, inputs and input types , mappings, records, and address. This is useful because this data is difficult to parse from the source code directly.
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 import {deepStrictEqual} from 'assert';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 
@@ -267,7 +271,7 @@ const records = credits_program.getImports()
 The following example shows how to query the mappings within a program and the other programs it imports:
 
 ```typescript
-import { AleoNetworkClient, Program } from '@provablehq/sdk';
+import { AleoNetworkClient, Program } from '@provablehq/sdk/testnet.js';
 import {deepStrictEqual} from 'assert';
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 

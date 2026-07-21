@@ -5,6 +5,9 @@ sidebar_label: Stablecoins
 sidebar_position: 2
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../../getting-started.mdx#network-selection) for details.
+:::
 
 Aleo supports two stablecoins backed by blue-chip asset issuers: [**USAD** and **USDCx**](../../../common-uses/private-stablecoins.mdx). The main features distinguishing these stablecoins from other assets on Aleo are:
 
@@ -60,7 +63,7 @@ Sequence of operations to compute a formatted Merkle exclusion proof of type `[M
 5. Format the Merkle proof using [`formatMerkleProof()`](../../api-reference/sealance-merkle-tree.mdx#formatmerkleproof).
 
 ```typescript
-import { SealanceMerkleTree } from '@provablehq/sdk';
+import { SealanceMerkleTree } from '@provablehq/sdk/testnet.js';
 
 // --- Config ---
 const PRIVATE_KEY = 'APrivateKey1zkp...'; // Replace with your private key

@@ -6,6 +6,10 @@ sidebar_position: 1
 
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../../getting-started.mdx#network-selection) for details.
+:::
+
 The official currency of Aleo Network are called Aleo Credits. All fees paid for transactions, as well as rewards for staking
 and mining, are in the form of Aleo Credits. Please refer to [Credits and Transfers](/learn/core-concepts/credits-and-transfers) for more information.
 
@@ -30,7 +34,7 @@ The base unit for Aleo Credits is the microcredit.  All functions expect and wil
 Similar to the [Deploying Programs](../deploy-programs.mdx) guide, we'll need to initialize some fundamental objects if you haven't already done so:
 
 ```typescript
-import { Account, AleoNetworkClient, initThreadPool, NetworkRecordProvider, ProgramManager, AleoKeyProvider } from '@provablehq/sdk';
+import { Account, AleoNetworkClient, initThreadPool, NetworkRecordProvider, ProgramManager, AleoKeyProvider } from '@provablehq/sdk/testnet.js';
 
 // If the threadpool has not been initialized, do so (this step can be skipped if it's been initialized elsewhere). 
 await initThreadPool();
