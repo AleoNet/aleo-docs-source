@@ -5,6 +5,10 @@ sidebar_label: Hash Functions
 sidebar_position: 8
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../getting-started.mdx#network-selection) for details.
+:::
+
 The Provable SDK provides access to several cryptographic hash functions that are compatible with Aleo's zero-knowledge proof system. These hash functions can be used for various purposes such as data integrity verification, commitment schemes, and generating deterministic values from inputs.
 
 ## Available Hash Functions
@@ -25,7 +29,7 @@ import {
     Pedersen64, Pedersen128,
     Poseidon2, Poseidon4, Poseidon8,
     Field, Scalar
-} from '@provablehq/sdk';
+} from '@provablehq/sdk/testnet.js';
 ```
 
 ## BHP Hash Functions

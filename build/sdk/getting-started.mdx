@@ -81,8 +81,17 @@ import { ... } from '@provablehq/sdk/mainnet.js';
 ```typescript
 import { ... } from '@provablehq/sdk/testnet.js';
 ```
+#### Dynamic (network selected at runtime)
+```typescript
+import { loadNetwork } from '@provablehq/sdk/dynamic.js';
 
-If no network is explicitly selected, the SDK defaults to the testnet network.
+const sdk = await loadNetwork('mainnet'); // or 'testnet'
+```
+Use the dynamic entry point when the target network isn't known until runtime (e.g. a user-selectable network in a wallet or browser app). For everything else, prefer the explicit `mainnet.js`/`testnet.js` import — it's simpler and lets bundlers tree-shake the unused network's WASM artifact.
+
+:::caution
+Importing bare `@provablehq/sdk` (with no subpath) also works, and currently resolves to the same build as `@provablehq/sdk/testnet.js`. Relying on this is discouraged: it doesn't make the target network obvious to a reader, and code copied between a testnet example and a mainnet example can end up silently pointed at the wrong network. Always import an explicit subpath — `mainnet.js`, `testnet.js`, or `dynamic.js`.
+:::
 
 ## WebAssembly Initialization
 When the SDK is imported, single-threaded WebAssembly is enabled by default. However, it is recommended to enable multithreaded WebAssembly as it is much more performant and eliminates the possibility of a computationally expensive operation blocking the main thread.

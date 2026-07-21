@@ -4,6 +4,10 @@ sidebar_label: Utility Functions
 sidebar_position: 32
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../../getting-started.mdx#network-selection) for details.
+:::
+
 <a name="UtilityFunctions"></a>
 
 ## Overview
@@ -30,7 +34,7 @@ initThreadPool(num_threads) ► Promise<void>
 **Example**
 
 ```javascript
-import { initThreadPool } from '@provablehq/sdk';
+import { initThreadPool } from '@provablehq/sdk/testnet.js';
 
 // Initialize with available CPU cores
 await initThreadPool(navigator.hardwareConcurrency);
@@ -62,7 +66,7 @@ verifyFunctionExecution(execution, verifying_key, program, function_id, imports,
 **Example**
 
 ```javascript
-import { verifyFunctionExecution, Execution, VerifyingKey, Program } from '@provablehq/sdk';
+import { verifyFunctionExecution, Execution, VerifyingKey, Program } from '@provablehq/sdk/testnet.js';
 
 const execution = Execution.fromString(executionJson);
 const verifyingKey = VerifyingKey.fromString(vkString);

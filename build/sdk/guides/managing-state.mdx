@@ -4,6 +4,11 @@ title: Managing Public and Private State
 sidebar_label: Managing State
 sidebar_position: 6
 ---
+
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../getting-started.mdx#network-selection) for details.
+:::
+
 ## Public State: Mappings
 Mappings are simple key-value stores defined in a program. They are represented by a key and a value each of a specified
 type. They are stored directly within the Aleo blockchain and can be publicly read by any participant in the Aleo network.
@@ -22,7 +27,7 @@ Updating mappings is done by executing a program function on the Aleo network wh
 program's mapping. For instance the `transfer_public` function in the `credits.aleo` program updates the `account`
 mapping (and thus a user's balance) when called.
 
-```leo
+```aleo
 // The public interface called by users
 function transfer_public:
     input r0 as address.public;
@@ -55,7 +60,7 @@ class provides the `getProgramMappingNames()` method to read the public mappings
 read the value of a specific key within a mapping.
 
 ```typescript
-import { AleoNetworkClient } from '@provablehq/sdk';
+import { AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
 const creditsMappings = await networkClient.getProgramMappingNames("credits.aleo");
@@ -96,7 +101,7 @@ If `credits.aleo` records are being searched for, users can also optionally spec
 - A maximum cumulative amount to find between all records.
 
 ```typescript
-import { Account, AleoNetworkClient } from '@provablehq/sdk';
+import { Account, AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 
 const account = new Account({ privateKey: 'APrivateKey1...'});
 const networkClient = new AleoNetworkClient("https://api.explorer.provable.com/v1");
@@ -129,7 +134,7 @@ When a `RecordProvider` is provided within the constructor of a `ProgramManager`
 A usage example of the `RecordProvider` is shown below using the `NetworkRecordProvider` implementation of the `RecordProvider` interface.
 
 ```typescript
-import { Account, AleoNetworkClient, AleoKeyProvider, NetworkRecordProvider, ProgramManager } from '@provablehq/sdk';
+import { Account, AleoNetworkClient, AleoKeyProvider, NetworkRecordProvider, ProgramManager } from '@provablehq/sdk/testnet.js';
 
 const account = new Account({ privateKey: 'APrivateKey1...'});
 
@@ -199,7 +204,7 @@ If a user receives a private record from a program execution, they can use the S
 
 Record decryption and ownership verification can be done in the SDK using the following code:
 ```typescript
-import { Account, RecordCiphertext, RecordPlaintext } from '@provablehq/sdk';
+import { Account, RecordCiphertext, RecordPlaintext } from '@provablehq/sdk/testnet.js';
 
 // Create an account from an existing private key
 const account = new Account({ privateKey: "existingPrivateKey" });
@@ -241,7 +246,7 @@ This function consumes a private `credits` record as input and outputs two new p
 If you've read the [Transferring Credits](./transfers/transfer-credits.mdx) guide, the following should look familiar to you:
 ```typescript
 // USER 1
-import { Account, ProgramManager, AleoKeyProvider, NetworkRecordProvider, AleoNetworkClient } from '@provablehq/sdk';
+import { Account, ProgramManager, AleoKeyProvider, NetworkRecordProvider, AleoNetworkClient } from '@provablehq/sdk/testnet.js';
 
 // Create a new NetworkClient, KeyProvider, RecordProvider, and ProgramManager
 const USER1 = new Account({privateKey: "APrivateKey1..."});
@@ -265,7 +270,7 @@ Consequently, if users would like to fetch their records from the network and us
 
 ```typescript
 // USER 2
-import { Account, ProgramManager, AleoKeyProvider, NetworkRecordProvider, AleoNetworkClient, RecordCiphertext } from '@provablehq/sdk';
+import { Account, ProgramManager, AleoKeyProvider, NetworkRecordProvider, AleoNetworkClient, RecordCiphertext } from '@provablehq/sdk/testnet.js';
 
 // Create a new NetworkClient, KeyProvider, RecordProvider, and ProgramManager for User 2
 const USER2 = new Account({privateKey: "APrivateKey1..."});

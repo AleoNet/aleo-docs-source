@@ -9,6 +9,10 @@ import PackageEntry from '@site/src/components/PackageEntry';
 
 Aleo allows users to privately transact through zero-knowledge enhanced programs. The [Provable SDK](https://github.com/provablehq/sdk) is a collection of JavaScript/Typescript libraries that provides the power to use these programs within the browser and all other levels of the web stack to build privacy-preserving applications.
 
+:::info Network selection
+`@provablehq/sdk` is split into per-network entry points (`/testnet.js`, `/mainnet.js`, `/dynamic.js`). Always import one of these explicitly rather than the bare package name — see [Network Selection](./getting-started.mdx#network-selection) in Getting Started for details.
+:::
+
 The SDK consists of three main libraries:
 
 <PackageEntry

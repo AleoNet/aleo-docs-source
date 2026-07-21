@@ -4,6 +4,11 @@ title: Creating Aleo Accounts
 sidebar_label: Creating Accounts
 sidebar_position: 2
 ---
+
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../getting-started.mdx#network-selection) for details.
+:::
+
 ## Account Keys
 The first step in operating a zero knowledge web application is creating a cryptographic identity for a user. In the
 context of Aleo, this process starts by generating a private key. From this private key, several keys can be derived that enable a user
@@ -29,7 +34,7 @@ All keys are considered sensitive information and should be stored securely!
 All keys can be created using the `Account` object:
 
 ```typescript
-import { Account } from '@provablehq/sdk';
+import { Account } from '@provablehq/sdk/testnet.js';
 
 const account = new Account();
 
@@ -44,7 +49,7 @@ const address = account.address();
 Alternatively, if you already having an existing account, then an `Account` object can be initialized with its private key:
 
 ```typescript
-import { Account } from '@provablehq/sdk';
+import { Account } from '@provablehq/sdk/testnet.js';
 
 const account = new Account({
     privateKey: 'APrivateKey1...',
@@ -54,7 +59,7 @@ const account = new Account({
 The SDK also provides a feature to encrypt your private key with a plaintext password, as well as a shortcut to initialize an `Account` object with the private key ciphertext and the corresponding password:
 
 ```typescript
-import { Account, PrivateKey } from '@provablehq/sdk';
+import { Account, PrivateKey } from '@provablehq/sdk/testnet.js';
 
 // From a newly generated encrypted private key
 const password = 'password';
@@ -73,7 +78,7 @@ const existingAccount = Account.fromCiphertext(existingCiphertext, existingPassw
 To check whether a string is a valid Aleo address, use the static `isValidAddress()` method:
 
 ```typescript
-import { Account } from '@provablehq/sdk';
+import { Account } from '@provablehq/sdk/testnet.js';
 
 const valid = Account.isValidAddress("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px");
 // true
@@ -87,7 +92,7 @@ const invalid = Account.isValidAddress("not_an_address");
 `Account` objects hold sensitive cryptographic material in WASM memory. When an account is no longer needed, call `destroy()` to securely zeroize and free all key material:
 
 ```typescript
-import { Account } from '@provablehq/sdk';
+import { Account } from '@provablehq/sdk/testnet.js';
 
 const account = new Account();
 // ... use account ...

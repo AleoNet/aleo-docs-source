@@ -5,6 +5,9 @@ sidebar_label: Executing Programs
 sidebar_position: 4
 ---
 
+:::info Network
+Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet, swap the import for `@provablehq/sdk/mainnet.js` — see [Network Selection](../getting-started.mdx#network-selection) for details.
+:::
 
 ## Program Execution Model
 
@@ -54,7 +57,7 @@ Let's walk through an example:
 Similar to the [Deploying Programs](./deploy-programs.mdx) guide, you'll need to initialize some fundamental objects if you haven't already done so:
 
 ```typescript
-import { Account, initThreadPool, ProgramManager, AleoKeyProvider } from '@provablehq/sdk';
+import { Account, initThreadPool, ProgramManager, AleoKeyProvider } from '@provablehq/sdk/testnet.js';
 
 // If the threadpool has not been initialized, do so (this step can be skipped if it's been initialized elsewhere). 
 await initThreadPool();
@@ -121,7 +124,7 @@ When the developer simply wants see the output of a function without the computa
 When run in this fashion, the program will execute and return the outputs of the function without generating a proof. This can be useful for testing a function in development.
 
 ```typescript
-import { Account, ProgramManager } from '@provablehq/sdk';
+import { Account, ProgramManager } from '@provablehq/sdk/testnet.js';
 
 /// Create the source for the "hello world" program
 const program = "program helloworld.aleo;\n\nfunction hello:\n    input r0 as u32.public;\n    input r1 as u32.private;\n    add r0 r1 into r2;\n    output r2 as u32.private;\n";
@@ -146,7 +149,7 @@ This approach is will not work for any function that has an async future defined
 :::
 
 ```typescript
-import { Account, AleoKeyProvider, AleoNetworkClient, ProgramManager, ProvingKey, VerifyingKey } from '@provablehq/sdk';
+import { Account, AleoKeyProvider, AleoNetworkClient, ProgramManager, ProvingKey, VerifyingKey } from '@provablehq/sdk/testnet.js';
 
 /// Initialize the key provider and network client.
 const keyProvider = new AleoKeyProvider();
