@@ -15,6 +15,17 @@ Every program has a unique identifier in the format `name.aleo` (e.g., `token.al
 
 Under the hood, every program ID is hashed to derive a **program address** — an `aleo1...` address just like a user account. This means programs live in the same address space as users, and can hold public state in mappings.
 
+:::tip Privacy tip
+**For better privacy, avoid including sensitive details in program and function names.**
+
+Randomizing these names only provides obfuscation:
+- An observer can't tell what a program does from a block explorer alone
+- Identifiers can still be discovered through other means
+- Once identified, that identifier can be used to classify all of that program's past and future calls
+
+Regardless of naming, a user's address is never exposed.
+:::
+
 :::danger
 Program addresses have no private key, so any records sent to them are permanently inaccessible. **Never** send records to a program address.
 :::

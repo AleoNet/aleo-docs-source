@@ -45,4 +45,15 @@ The distinction also maps to where code runs:
 
 This public/private split is what makes Aleo fundamentally different from other blockchains. It's not privacy bolted on as an afterthought; it's the core of how programs are structured and executed.
 
+:::tip Privacy tip
+**For better privacy, avoid including sensitive details in program and function names.**
+
+Randomizing these names only provides obfuscation:
+- An observer can't tell what a program does from a block explorer alone
+- Identifiers can still be discovered through other means
+- Once identified, that identifier can be used to classify all of that program's past and future calls
+
+Regardless of naming, a user's address is never exposed.
+:::
+
 [^1]: `sender_ciphertext` was included as of [Consensus V8](https://provable.com/blog/updates-to-aleo-records-and-varuna).  Records produced before this must be upgraded before being spent
