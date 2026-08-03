@@ -11,6 +11,17 @@ Examples on this page target Testnet (`@provablehq/sdk/testnet.js`). For Mainnet
 
 Developers on Aleo will often need to deploy their own program to implement the logic of their dApp. This section provides an overview of how to deploy a program to the Aleo Network and the languages that can be used to develop programs.
 
+:::tip Privacy tip
+**For better privacy, avoid including sensitive details in program and function names.**
+
+Randomizing these names only provides obfuscation:
+- An observer can't tell what a program does from a block explorer alone
+- Identifiers can still be discovered through other means
+- Once identified, that identifier can be used to classify all of that program's past and future calls
+
+Regardless of naming, a user's address is never exposed.
+:::
+
 ## Developing Programs
 Programs on Aleo are written in one of two languages:
 
