@@ -25,7 +25,7 @@ Dynamic also allows users the flexibility to connect **external wallets** like *
 | **User Onboarding**          | Email / social / passkey, no install            | Wallet extension required                  |
 | **Recovery**                 | Export key, iCloud / Google Drive backup        | User's wallet                              |
 | **Transaction Execution**    | `proveTransaction()`                            | `requestTransaction()`                     |
-| **Message Signing**          | Not yet supported (v4.83)                       | Supported                                  |
+| **Message Signing**          | Not yet supported (v5.1)                        | Supported                                  |
 
 {/* :::warning Embedded vs. External
 - **Transaction execution** — uses `proveTransaction({ programId, functionName, inputs, inputTypes })` on the connector, not `requestTransaction(tx)`. See [Executing Programs](#executing-programs).
@@ -64,6 +64,14 @@ npm install @dynamic-labs/sdk-react-core @dynamic-labs/aleo
 ```
 - `@dynamic-labs/sdk-react-core` — provider, hooks, prebuilt UI.
 - `@dynamic-labs/aleo` — Aleo wallet connectors (external + embedded).
+
+:::note API version
+API version `2026_04_01` requires React SDK **4.76.0 or newer** and enforces step-up
+verification on sensitive wallet operations. If you drive those operations from your own
+UI rather than through `<DynamicWidget/>`, read
+[Step-Up Auth & Device Registration](#step-up-auth--device-registration) before switching
+your environment over.
+:::
 
 ### Provider Configuration
 
@@ -221,7 +229,7 @@ Inputs must carry their type suffix (`1000000u64`, `aleo1…`, `42field`, `true`
 
 ### Switching Networks
 
-Embedded wallets support programmatic switching via `switchNetwork`, which still lives on the connector (not yet promoted to the wallet as of v4.83). ChainIds are strings — `'0'` for mainnet, `'1'` for testnet — and the selection is persisted in `localStorage` under `dynamic_aleo_network_id`.
+Embedded wallets support programmatic switching via `switchNetwork`, which still lives on the connector (not yet promoted to the wallet as of v5.1). ChainIds are strings — `'0'` for mainnet, `'1'` for testnet — and the selection is persisted in `localStorage` under `dynamic_aleo_network_id`.
 
 ```ts
 import type { DynamicWaasAleoConnector } from '@dynamic-labs/aleo'
@@ -293,7 +301,7 @@ const { records } = await primaryWallet.listOwnedRecords()
 `signMessage(message: string): Promise<string>` signs a UTF-8 string with the wallet's Aleo key. The encoding (hex / base58) is wallet-specific — treat the result as opaque. Common use: a server issues a challenge, the user signs it, the server verifies. External wallets prompt via their own UI.
 
 :::warning
-`signMessage` throws `NotSupported` on embedded wallets as of v4.83 — Sodot's `EdBls12377.sign(bytes)` ships in Phase 2. External Aleo wallets (Shield, Puzzle, Fox) support it today.
+`signMessage` throws `NotSupported` on embedded wallets as of v5.1 — Sodot's `EdBls12377.sign(bytes)` ships in Phase 2. External Aleo wallets (Shield, Puzzle, Fox) support it today.
 :::
 
 ```ts
@@ -311,6 +319,110 @@ Server-side verification needs Aleo's signature primitives (see the [Provable SD
 const { handleLogOut } = useDynamicContext()
 await handleLogOut()
 ```
+
+## Step-Up Auth & Device Registration
+
+API version `2026_04_01` adds two security requirements to every Dynamic environment. Both are
+enforced server-side — a client that skips them gets a `403` — so ship the handling **before** you
+switch the API version in the [dashboard](https://app.dynamic.xyz/dashboard/developer/api).
+Requires React SDK 4.76.0+.
+
+### Step-Up Authentication
+
+Sensitive operations need a short-lived, scope-bound *elevated access token* on top of the normal
+session:
+
+| Operation                                                                       | Scope                                   | Enforced             |
+|---------------------------------------------------------------------------------|-----------------------------------------|----------------------|
+| Export a private key or key shares                                              | `wallet:export`                         | Always               |
+| Sign a message or transaction with an embedded wallet                           | `wallet:sign`                           | Only when configured |
+| Link or unlink a credential (wallet, email, phone, social, passkey, MFA device) | `credential:link` / `credential:unlink` | Always               |
+
+Sign-in, sign-up, balance reads, and record reads are never gated.
+
+`<DynamicWidget/>` handles all of this for you — it detects when step-up is needed and shows the
+verification UI before proceeding. **You only need code when you call a gated operation yourself**:
+your own export button, or `signMessage` / `proveTransaction` on `primaryWallet` from your own UI.
+
+Gate the call with `useStepUpAuthentication`. `TokenScope` lives in `@dynamic-labs/sdk-api-core`, a
+transitive dependency of the React SDK — add it to your `package.json` explicitly, pinned to the
+version the SDK resolves, so the enum you import is the one the SDK checks against.
+
+```tsx
+import { useDynamicContext, useStepUpAuthentication } from '@dynamic-labs/sdk-react-core'
+import { TokenScope } from '@dynamic-labs/sdk-api-core'
+import { isAleoWallet } from '@dynamic-labs/aleo'
+
+function SignButton({ message }: { message: string }) {
+  const { primaryWallet } = useDynamicContext()
+  const { isStepUpRequired, promptStepUpAuth } = useStepUpAuthentication()
+
+  const handleSign = async () => {
+    if (!primaryWallet || !isAleoWallet(primaryWallet)) return
+
+    // Only embedded wallets are gated — external Aleo wallets sign inside their
+    // own extension and never reach Dynamic's signing endpoint.
+    const gated =
+      primaryWallet.connector?.isEmbeddedWallet &&
+      (await isStepUpRequired({ scope: TokenScope.Walletsign }))
+
+    if (gated) {
+      try {
+        await promptStepUpAuth({ requestedScopes: [TokenScope.Walletsign] })
+      } catch {
+        return // user cancelled, or verification failed
+      }
+    }
+
+    // The elevated token is stored in SDK state and attached to the call for you.
+    const signature = await primaryWallet.signMessage(message)
+  }
+
+  return <button onClick={handleSign}>Sign</button>
+}
+```
+
+`promptStepUpAuth` picks the verification method from what the user has registered — passkey or TOTP
+for MFA users; email/SMS OTP, wallet signature, or social re-auth otherwise — and shows Dynamic's
+own UI. For a custom UI, use `checkStepUpAuth` (server-authoritative, and returns the available
+credentials) with the individual `verify*` methods. See Dynamic's
+[step-up reference](https://www.dynamic.xyz/docs/react/authentication-methods/step-up-auth/overview).
+
+:::tip
+`wallet:export` and `wallet:sign` are *exclusive* scopes — request each on its own, never combined
+with another. `wallet:export` is also single-use: it is consumed by the first qualifying call, so
+the user re-verifies for every export.
+:::
+
+:::warning Which Aleo paths this actually affects today
+`signMessage` still throws `NotSupported` on embedded wallets (see
+[Signing Messages](#signing-messages)), so the sign gate above is forward-looking for the embedded
+path and unnecessary for external wallets. What bites now is `wallet:export` — always enforced — and
+`proveTransaction`, which signs through MPC and is gated whenever `wallet:sign` is configured for
+your environment.
+:::
+
+### Device Registration
+
+When enabled for your environment, signing in from an unrecognized device requires email
+verification first. Dynamic's modal handles the prompt, the email redirect, and completion. It is on
+by default and needs no code:
+
+```tsx
+<DynamicContextProvider
+  settings={{
+    environmentId: 'YOUR_ENVIRONMENT_ID',
+    walletConnectors: [DynamicWaasAleoConnectors, AleoWalletConnectors],
+    deviceRegistrationModal: { enabled: true }, // the default — stated for clarity
+  }}
+>
+```
+
+To build your own, set `{ enabled: false }` and drive it with `isDeviceRegistrationRequired` from
+`@dynamic-labs-sdk/client`, listening for completion via
+`useDynamicEvents('deviceRegistrationCompleted', …)`. Trusted devices can be listed and revoked with
+`getRegisteredDevices`, `revokeRegisteredDevice`, and `revokeAllRegisteredDevices`.
+
 {/* 
 ## Read Chain State with the Provable API
 
