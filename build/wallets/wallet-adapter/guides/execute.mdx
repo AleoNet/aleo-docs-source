@@ -8,6 +8,10 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 
 # Execute Transactions
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](../migration-guide.mdx) to update.
+:::
+
 <DemoForm
   action="Execute"
   fields={[
@@ -34,7 +38,7 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 />
 
 <CopyCodeBlock>{`
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
 
 const { executeTransaction, transactionStatus } = useWallet();
 

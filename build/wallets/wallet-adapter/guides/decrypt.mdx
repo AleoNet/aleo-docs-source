@@ -8,6 +8,10 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 
 # Decrypt Records
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](../migration-guide.mdx) to update.
+:::
+
 <DemoForm
   action="Decrypt"
   fields={[
@@ -19,8 +23,8 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
   }}
 />
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adapter-core';
 import React, { useCallback } from 'react';
 
 export const DecryptMessage = () => {

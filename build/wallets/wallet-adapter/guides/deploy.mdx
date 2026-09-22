@@ -8,6 +8,10 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 
 # Deploy Programs
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](../migration-guide.mdx) to update.
+:::
+
 <DemoForm
   action="Deploy"
   fields={[
@@ -27,8 +31,8 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 />
 
 <CopyCodeBlock>{`
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adapter-core';
 import { AleoDeployment } from '@provablehq/aleo-wallet-standard';
 import React, { useCallback } from 'react';
 

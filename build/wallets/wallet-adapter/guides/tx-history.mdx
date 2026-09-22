@@ -8,6 +8,10 @@ import { DemoForm, CopyCodeBlock } from '@site/src/components/WalletDemo';
 
 # Transaction History
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](../migration-guide.mdx) to update.
+:::
+
 This requires the `OnChainHistory` decrypt permission.
 
 <DemoForm
@@ -21,8 +25,8 @@ This requires the `OnChainHistory` decrypt permission.
   }}
 />
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adaptor-core';
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
+import { WalletNotConnectedError } from '@provablehq/aleo-wallet-adapter-core';
 import React, { useCallback } from 'react';
 
 export const RequestTransactionHistory = () => {
