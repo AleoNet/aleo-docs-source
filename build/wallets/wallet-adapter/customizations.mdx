@@ -11,6 +11,10 @@ import BrowserOnly from '@docusaurus/BrowserOnly';
 
 # Theming
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](./migration-guide.mdx) to update.
+:::
+
 Customize the wallet adapter appearance using CSS variables. Override these in your stylesheet to match your app's design system.
 
 <CopyCodeBlock language="css" label="CSS Variables">{`:root {
@@ -40,7 +44,7 @@ Use the `useWallet()` hook and `<WalletModalProvider/>` to build fully custom wa
 
 <WalletSelector />
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
 
 const { wallets, selectWallet, connected, wallet } = useWallet();
 
@@ -64,7 +68,7 @@ wallets.map((w) => {
 
 <WalletActions />
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
 import { Network } from '@provablehq/aleo-types';
 
 const { connect, disconnect, switchNetwork, connected, wallet, network } = useWallet();

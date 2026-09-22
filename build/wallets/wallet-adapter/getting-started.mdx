@@ -11,6 +11,10 @@ import BrowserOnly from '@docusaurus/BrowserOnly';
 
 # Aleo Wallet Adapter
 
+:::warning Package renamed
+This page uses `@provablehq/aleo-wallet-adapter-*`. If your project still imports from `@provablehq/aleo-wallet-adaptor-*`, see the [Migration Guide](./migration-guide.mdx) to update.
+:::
+
 A modular toolkit for integrating Aleo wallets into your React applications. Connect to any compatible wallet and access the full power of the Aleo network.
 
 ## Installation
@@ -19,9 +23,9 @@ Install the required dependencies:
 
 ```bash
 npm install --save \
-    @provablehq/aleo-wallet-adaptor-react \
-    @provablehq/aleo-wallet-adaptor-react-ui \
-    @provablehq/aleo-wallet-adaptor-core \
+    @provablehq/aleo-wallet-adapter-react \
+    @provablehq/aleo-wallet-adapter-react-ui \
+    @provablehq/aleo-wallet-adapter-core \
     @provablehq/aleo-wallet-standard \
     @provablehq/aleo-types \
     react
@@ -31,13 +35,13 @@ Additionally, install one or more wallet adapters:
 
 ```bash
 # Shield Wallet
-npm install --save @provablehq/aleo-wallet-adaptor-shield
+npm install --save @provablehq/aleo-wallet-adapter-shield
 
 # Puzzle Wallet
-npm install --save @provablehq/aleo-wallet-adaptor-puzzle
+npm install --save @provablehq/aleo-wallet-adapter-puzzle
 
 # Fox Wallet
-npm install --save @provablehq/aleo-wallet-adaptor-fox
+npm install --save @provablehq/aleo-wallet-adapter-fox
 ```
 
 ## Setup
@@ -64,8 +68,8 @@ Options configured on the page header are reflected in the code above.
 
 The `useWallet` hook provides access to wallet state and methods:
 
-<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+<CopyCodeBlock>{`import { useWallet } from '@provablehq/aleo-wallet-adapter-react';
+import { WalletMultiButton } from '@provablehq/aleo-wallet-adapter-react-ui';
 
 const { connected, address, network, switchNetwork } = useWallet();
 
@@ -82,13 +86,20 @@ console.log('Network:', network);`}</CopyCodeBlock>
 The `WalletMultiButton` component provides a ready-to-use button and modal for connecting to a wallet:
 
 <BrowserOnly>{() => {
-  const { WalletMultiButton } = require('@provablehq/aleo-wallet-adaptor-react-ui');
+  const { WalletMultiButton } = require('@provablehq/aleo-wallet-adapter-react-ui');
   return <WalletMultiButton />;
 }}</BrowserOnly>
 
 <div style={{marginTop: '1rem'}} />
 
-<CopyCodeBlock>{`import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+<CopyCodeBlock>{`import { WalletMultiButton } from '@provablehq/aleo-wallet-adapter-react-ui';
 
 // Pre-built button component
 <WalletMultiButton />`}</CopyCodeBlock>
+
+## Resources
+
+- [GitHub repository](https://github.com/ProvableHQ/aleo-dev-toolkit/tree/master/packages/aleo-wallet-adapter)
+- [Live demo app](https://aleo-dev-toolkit-react-app.vercel.app/wallet)
+- [npm package](https://www.npmjs.com/package/@provablehq/aleo-wallet-adapter-core)
+- [Package documentation](https://aleo-dev-toolkit-documentation.vercel.app/docs/wallet-adapter)
